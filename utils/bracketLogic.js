@@ -1,4 +1,4 @@
-// Bracket logic utilities
+// utils/bracketLogic.js
 
 /**
  * Randomly shuffle an array using Fisher-Yates algorithm
@@ -14,71 +14,95 @@ export const shuffleArray = (array) => {
 
 /**
  * Create brackets from users (8 users per bracket)
- * PRIORITY LOGIC:
- * 1. Ensure every unique user gets into at least 1 bracket if possible.
- * 2. Fill remaining spots with duplicate entries (if user bought multiple).
- * 3. Enforce constraint: No user can be in the same bracket twice.
+ * OPTIMIZED & RANDOMIZED LOGIC:
+ * 1. Calculate realistic max brackets (filtering out dead tickets).
+ * 2. Sort users by ticket count to ensure heavy users fit.
+ * 3. Place users into RANDOM valid brackets (not just the first one).
  */
 export const createBrackets = (users) => {
-  // 1. Separate entries into Primary (1st ticket) and Secondary (extra tickets)
-  const distinctUsers = new Map(); // id -> user object
-  const userCounts = new Map(); // id -> count
-  
+  // 1. Group by User ID and count tickets
+  const userMap = new Map();
   users.forEach(u => {
-    if (!distinctUsers.has(u.id)) {
-      distinctUsers.set(u.id, u);
+    if (!userMap.has(u.id)) {
+      userMap.set(u.id, { ...u, count: 0 });
     }
-    userCounts.set(u.id, (userCounts.get(u.id) || 0) + 1);
+    userMap.get(u.id).count++;
   });
+  
+  const uniqueUsers = Array.from(userMap.values());
+  
+  // 2. Optimization: Calculate realistic max brackets
+  let validTickets = users.length;
+  let numBrackets = Math.floor(validTickets / 8);
+  
+  // Iterative adjustment to find true max
+  for (let i = 0; i < 5; i++) {
+    if (numBrackets === 0) break;
+    
+    let currentValidCount = 0;
+    uniqueUsers.forEach(u => {
+      // User can only be in a bracket once
+      currentValidCount += Math.min(u.count, numBrackets); 
+    });
+    
+    const newNumBrackets = Math.floor(currentValidCount / 8);
+    if (newNumBrackets === numBrackets) break;
+    numBrackets = newNumBrackets;
+  }
+  
+  if (numBrackets === 0) return []; 
 
-  const primaryEntries = [];
-  const secondaryEntries = [];
-
-  distinctUsers.forEach((user, id) => {
-    primaryEntries.push(user);
-    const count = userCounts.get(id);
-    for (let i = 1; i < count; i++) {
-      secondaryEntries.push(user);
-    }
-  });
-
-  // 2. Shuffle both groups independently to ensure randomness within priority tiers
-  const shuffledPrimary = shuffleArray(primaryEntries);
-  const shuffledSecondary = shuffleArray(secondaryEntries);
-
-  // 3. Combine with Primary first (Priority Queue)
-  // This ensures we try to place every unique user BEFORE placing 2nd/3rd entries
-  const priorityQueue = [...shuffledPrimary, ...shuffledSecondary];
+  // 3. Sort users by ticket count (Highest first)
+  uniqueUsers.sort((a, b) => b.count - a.count);
 
   // 4. Initialize Brackets
-  const totalSlots = priorityQueue.length;
-  // We can only make full brackets of 8
-  const numBrackets = Math.floor(totalSlots / 8);
-  const brackets = Array.from({ length: numBrackets }, () => []);
+  const brackets = Array.from({ length: numBrackets }, (_, i) => ({
+    id: i + 1,
+    players: []
+  }));
 
-  // 5. Distribute greedily
-  for (const user of priorityQueue) {
-    // Find the first bracket that:
-    // a) Has space (< 8 players)
-    // b) Does NOT already have this user (Constraint: Unique per bracket)
-    const targetBracket = brackets.find(b => 
-      b.length < 8 && !b.some(u => u.id === user.id)
+  // 5. Fill Logic (Randomized Distribution)
+  uniqueUsers.forEach(user => {
+    const ticketsToPlace = Math.min(user.count, numBrackets);
+    
+    // Find ALL brackets where this user can legally go
+    const validBrackets = brackets.filter(b => 
+      b.players.length < 8 && !b.players.some(p => p.id === user.id)
     );
 
-    if (targetBracket) {
-      targetBracket.push(user);
+    // Shuffle the valid options so we pick random ones
+    for (let i = validBrackets.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [validBrackets[i], validBrackets[j]] = [validBrackets[j], validBrackets[i]];
     }
-    // If no suitable bracket found, this entry is effectively "leftover" and refunded/ignored
-  }
 
-  // 6. Return only full brackets (size 8)
-  // Partial brackets are discarded as they cannot form a valid tournament tree
-  return brackets.filter(b => b.length === 8);
+    // Take the first N brackets from the shuffled list
+    const selectedBrackets = validBrackets.slice(0, ticketsToPlace);
+
+    // Add user to the selected brackets
+    selectedBrackets.forEach(bracket => {
+      const { count, ...cleanUser } = user;
+      bracket.players.push(cleanUser);
+    });
+  });
+
+  // 6. Final Shuffle within brackets (Matchup Randomization)
+  brackets.forEach(b => {
+    const players = b.players;
+    for (let i = players.length - 1; i > 0; i--) {
+      const j = Math.floor(Math.random() * (i + 1));
+      [players[i], players[j]] = [players[j], players[i]];
+    }
+  });
+
+  // 7. Return only full brackets
+  return brackets
+    .filter(b => b.players.length === 8)
+    .map(b => b.players);
 };
 
 /**
  * Create a full, pre-filled bracket structure (Standard 8-player Single Elimination)
- * Pre-filling ensures the visual tree is fully rendered with empty slots.
  */
 export const createStepLadderStructure = (users) => {
   const rounds = [];
@@ -234,8 +258,6 @@ export const isPlayerLiveInCohort = (playerId, cohortBrackets) => {
 
 /**
  * Check if a specific game number is relevant for a player.
- * It is relevant if the player has NOT been eliminated prior to this round
- * in at least one of the brackets they are entered in.
  */
 export const isScoreRelevant = (playerId, gameNumber, brackets) => {
   // Game 1 is always relevant
@@ -247,7 +269,6 @@ export const isScoreRelevant = (playerId, gameNumber, brackets) => {
   if (playerBrackets.length === 0) return false;
 
   // Check if they are eliminated in ALL brackets before this game
-  // If there is ANY bracket where they are NOT eliminated before this game, it's relevant.
   return playerBrackets.some(bracket => !isEliminatedBeforeGame(bracket, playerId, gameNumber));
 };
 
@@ -272,5 +293,5 @@ const isEliminatedBeforeGame = (bracket, playerId, gameNumber) => {
       return true; // Eliminated in this bracket before the target game
     }
   }
-  return false; // Not eliminated (either won all previous, or previous rounds pending)
+  return false; // Not eliminated
 };

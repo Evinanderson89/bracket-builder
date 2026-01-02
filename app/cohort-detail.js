@@ -77,14 +77,48 @@ export default function CohortDetailScreen() {
     return users.filter(u => u.name.toLowerCase().includes(playerSearch.toLowerCase()));
   }, [users, playerSearch]);
 
+  // --- FIXED: Smart Calculation ---
+  // This calculates the TRUE limit by accounting for the "No Self-Play" rule.
+  const bracketsToGenerate = useMemo(() => {
+    // 1. Get all active users and their ticket counts
+    const activePlayers = selectedUserIds.map(uid => {
+      const user = users.find(u => u.id === uid);
+      const count = cohort?.userBracketCounts?.[uid] || user?.numBrackets || 1;
+      return { id: uid, count };
+    });
+
+    let totalTickets = activePlayers.reduce((sum, p) => sum + p.count, 0);
+    
+    // Start with the naive estimate (Total / 8)
+    let maxBrackets = Math.floor(totalTickets / 8);
+
+    // Iteratively lower the number until it fits everyone's constraints
+    // (If I have 20 tickets but maxBrackets is 7, 13 of my tickets are dead weight)
+    for (let i = 0; i < 5; i++) {
+      if (maxBrackets === 0) break;
+      
+      let usableTickets = 0;
+      activePlayers.forEach(p => {
+        // A player can only use up to 'maxBrackets' tickets
+        usableTickets += Math.min(p.count, maxBrackets);
+      });
+
+      const newMax = Math.floor(usableTickets / 8);
+      if (newMax === maxBrackets) break; // Found the stable number
+      maxBrackets = newMax;
+    }
+
+    return maxBrackets;
+  }, [selectedUserIds, users, cohort?.userBracketCounts]);
+
+  // Count only the spots that are actually usable (ignoring dead tickets)
   const totalPlayerInstances = selectedUserIds.reduce((sum, uid) => {
     const user = users.find(u => u.id === uid);
     const count = cohort?.userBracketCounts?.[uid] || user?.numBrackets || 1;
-    return sum + count;
+    return sum + Math.min(count, bracketsToGenerate || 999); // Cap at max brackets if calculated
   }, 0);
   
-  const bracketsToGenerate = Math.floor(totalPlayerInstances / 8);
-  const playersNeeded = 8 - (totalPlayerInstances % 8);
+  const playersNeeded = (bracketsToGenerate + 1) * 8 - totalPlayerInstances;
   const isDeployable = bracketsToGenerate > 0;
 
   // --- Actions ---
@@ -326,7 +360,8 @@ export default function CohortDetailScreen() {
         <View style={styles.footerContainer}>
           <View style={styles.footerInfo}>
              <Text style={styles.footerStats}><Text style={{fontWeight: 'bold', color: Colors.white}}>{totalPlayerInstances}</Text> Spots Filled</Text>
-             {totalPlayerInstances % 8 !== 0 && <Text style={styles.footerSub}>Add {playersNeeded} more for next bracket</Text>}
+             {/* Note: playersNeeded is rough estimate based on next bracket */}
+             <Text style={styles.footerSub}>Add {playersNeeded} more for next bracket</Text>
           </View>
           <TouchableOpacity style={[styles.deployBtn, !isDeployable && styles.deployBtnDisabled]} onPress={handleDeploy} disabled={!isDeployable}>
             <Text style={styles.deployBtnText}>Deploy ({bracketsToGenerate})</Text>
