@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -8,7 +8,6 @@ import {
   ScrollView,
   SafeAreaView,
   Alert,
-  Modal,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useApp } from '../context/AppContext';
@@ -19,268 +18,214 @@ import NavigationHeader from '../components/NavigationHeader';
 export default function CohortDetailScreen() {
   const router = useRouter();
   const { cohortId } = useLocalSearchParams();
-  const { cohorts, getCohortBrackets, users, deployCohort, updateCohort, updateUser } = useApp();
-  const [editingUsers, setEditingUsers] = useState(false);
-  const [bracketCountInputs, setBracketCountInputs] = useState({});
+  const { cohorts, getCohortBrackets, users, deployCohort, updateCohort } = useApp();
+  
+  const [editingMode, setEditingMode] = useState(false);
+  const [playerSearch, setPlayerSearch] = useState('');
 
   const cohort = cohorts.find(c => c.id === cohortId);
   const brackets = cohort ? getCohortBrackets(cohortId) : [];
   const selectedUserIds = cohort?.selectedUserIds || [];
-  const selectedUsers = users.filter(u => selectedUserIds.includes(u.id));
-  const userBracketCounts = cohort?.userBracketCounts || {};
+  
+  // Calculate potential bracket count
+  const totalPlayerInstances = selectedUserIds.reduce((sum, uid) => {
+    const count = cohort?.userBracketCounts?.[uid] || users.find(u => u.id === uid)?.numBrackets || 1;
+    return sum + count;
+  }, 0);
+  const bracketsToGenerate = Math.floor(totalPlayerInstances / 8);
 
-  const handleToggleUser = (userId) => {
-    if (!cohort) return;
-    
-    const newSelectedIds = selectedUserIds.includes(userId)
-      ? selectedUserIds.filter(id => id !== userId)
-      : [...selectedUserIds, userId];
-    
-    // Initialize bracket count to user's default when adding
-    const newBracketCounts = { ...userBracketCounts };
-    if (!selectedUserIds.includes(userId) && !newBracketCounts[userId]) {
-      const user = users.find(u => u.id === userId);
-      const defaultCount = user?.numBrackets || 1;
-      newBracketCounts[userId] = defaultCount;
-      // Initialize input value
-      setBracketCountInputs(prev => ({
-        ...prev,
-        [userId]: defaultCount.toString(),
-      }));
-    }
-    
-    // Remove bracket count when removing user
-    if (selectedUserIds.includes(userId)) {
+  const filteredUsers = useMemo(() => {
+    if (!playerSearch) return users;
+    return users.filter(u => u.name.toLowerCase().includes(playerSearch.toLowerCase()));
+  }, [users, playerSearch]);
+
+  const toggleUserSelection = (userId) => {
+    const isSelected = selectedUserIds.includes(userId);
+    let newSelectedIds;
+    let newBracketCounts = { ...cohort.userBracketCounts };
+
+    if (isSelected) {
+      newSelectedIds = selectedUserIds.filter(id => id !== userId);
       delete newBracketCounts[userId];
-      setBracketCountInputs(prev => {
-        const updated = { ...prev };
-        delete updated[userId];
-        return updated;
-      });
+    } else {
+      newSelectedIds = [...selectedUserIds, userId];
+      // Default to 1 bracket when adding
+      const user = users.find(u => u.id === userId);
+      newBracketCounts[userId] = user?.numBrackets || 1;
     }
-    
-    updateCohort(cohortId, { 
+
+    updateCohort(cohortId, {
       selectedUserIds: newSelectedIds,
       userBracketCounts: newBracketCounts,
     });
   };
 
-  const handleBracketCountChange = (userId, value) => {
-    setBracketCountInputs(prev => ({
-      ...prev,
-      [userId]: value,
-    }));
-  };
+  const updateBracketCount = (userId, increment) => {
+    const currentCount = cohort.userBracketCounts?.[userId] || 1;
+    const newCount = currentCount + increment;
+    
+    if (newCount < 1) return;
 
-  const handleBracketCountBlur = (userId) => {
-    if (!cohort) return;
-    
-    const value = bracketCountInputs[userId];
-    if (!value || value.trim() === '') {
-      // Reset to current value if empty
-      const user = users.find(u => u.id === userId);
-      const currentCount = userBracketCounts[userId] || user?.numBrackets || 1;
-      setBracketCountInputs(prev => ({
-        ...prev,
-        [userId]: currentCount.toString(),
-      }));
-      return;
-    }
-    
-    const count = parseInt(value, 10);
-    if (isNaN(count) || count < 1) {
-      Alert.alert('Error', 'Number of brackets must be at least 1');
-      // Reset to current value
-      const user = users.find(u => u.id === userId);
-      const currentCount = userBracketCounts[userId] || user?.numBrackets || 1;
-      setBracketCountInputs(prev => ({
-        ...prev,
-        [userId]: currentCount.toString(),
-      }));
-      return;
-    }
-
-    const newBracketCounts = { ...userBracketCounts };
-    newBracketCounts[userId] = count;
-    
-    updateCohort(cohortId, { userBracketCounts: newBracketCounts });
+    updateCohort(cohortId, {
+      userBracketCounts: {
+        ...cohort.userBracketCounts,
+        [userId]: newCount
+      }
+    });
   };
 
   const handleDeploy = async () => {
-    if (!cohort) return;
-
-    if (selectedUsers.length === 0) {
-      Alert.alert('Error', 'Please select at least one user before deploying');
+    if (bracketsToGenerate < 1) {
+      Alert.alert('Not Enough Players', `You need at least 8 player spots to form a bracket. Currently have ${totalPlayerInstances}.`);
       return;
     }
-
-    // Check if we have enough players after expanding by numBrackets
-    const totalPlayerInstances = selectedUsers.reduce((sum, user) => {
-      const numBrackets = userBracketCounts[user.id] || user.numBrackets || 1;
-      return sum + numBrackets;
-    }, 0);
-    const bracketsPossible = Math.floor(totalPlayerInstances / 8);
     
-    if (bracketsPossible < 1) {
-      Alert.alert(
-        'Error',
-        `Need at least 8 player instances (players × brackets) to create at least one bracket. Currently have ${totalPlayerInstances} instances.`
-      );
-      return;
-    }
-
     try {
-      await deployCohort(cohortId, selectedUsers, userBracketCounts);
-      Alert.alert('Success', 'Tournament deployed successfully!');
-      setEditingUsers(false);
+      await deployCohort(cohortId, users.filter(u => selectedUserIds.includes(u.id)), cohort.userBracketCounts);
+      Alert.alert('Success', 'Tournament brackets generated!');
+      setEditingMode(false);
     } catch (error) {
-      Alert.alert('Error', error.message || 'Failed to deploy tournament');
+      Alert.alert('Error', error.message);
     }
   };
 
-  if (!cohort) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <View style={styles.errorContainer}>
-          <Text style={styles.errorText}>Cohort not found</Text>
-          <TouchableOpacity
-            style={styles.button}
-            onPress={() => router.back()}
-          >
-            <Text style={styles.buttonText}>Go Back</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
-  }
-
-  const canDeploy = cohort.status === CohortStatus.NOT_DEPLOYED && selectedUsers.length > 0;
+  if (!cohort) return null;
 
   return (
     <SafeAreaView style={styles.container}>
       <NavigationHeader title={cohort.name} />
-
-      <View style={styles.infoSection}>
-        <Text style={styles.infoText}>Type: {cohort.type}</Text>
-        <Text style={styles.infoText}>Status: {cohort.status}</Text>
-        <Text style={styles.infoText}>Brackets: {brackets.length}</Text>
-        <Text style={styles.infoText}>Selected Players: {selectedUsers.length}</Text>
+      
+      {/* Dashboard Header */}
+      <View style={styles.dashboard}>
+        <View style={styles.statBox}>
+          <Text style={styles.statValue}>{selectedUserIds.length}</Text>
+          <Text style={styles.statLabel}>Players</Text>
+        </View>
+        <View style={styles.statBox}>
+          <Text style={styles.statValue}>{bracketsToGenerate}</Text>
+          <Text style={styles.statLabel}>Est. Brackets</Text>
+        </View>
+        <View style={styles.statBox}>
+          <Text style={styles.statValue}>{brackets.length}</Text>
+          <Text style={styles.statLabel}>Active Brackets</Text>
+        </View>
       </View>
 
+      {/* Main Action Bar */}
       {cohort.status === CohortStatus.NOT_DEPLOYED && (
-        <View style={styles.actionSection}>
-          <TouchableOpacity
-            style={[styles.actionButton, editingUsers && styles.actionButtonActive]}
-            onPress={() => setEditingUsers(!editingUsers)}
-          >
-            <Text style={styles.actionButtonText}>
-              {editingUsers ? 'Done Editing' : 'Edit Players'}
-            </Text>
-          </TouchableOpacity>
-          {canDeploy && (
-            <TouchableOpacity
-              style={styles.deployButton}
-              onPress={handleDeploy}
-            >
-              <Text style={styles.deployButtonText}>Deploy Tournament</Text>
-            </TouchableOpacity>
-          )}
+        <View style={styles.actionBar}>
+           {!editingMode ? (
+             <>
+                <TouchableOpacity style={styles.primaryButton} onPress={() => setEditingMode(true)}>
+                  <Text style={styles.primaryButtonText}>Select Players</Text>
+                </TouchableOpacity>
+                {bracketsToGenerate > 0 && (
+                  <TouchableOpacity style={styles.deployButton} onPress={handleDeploy}>
+                    <Text style={styles.deployButtonText}>Deploy Tournament ({bracketsToGenerate} Brackets)</Text>
+                  </TouchableOpacity>
+                )}
+             </>
+           ) : (
+             <TouchableOpacity style={styles.doneButton} onPress={() => setEditingMode(false)}>
+               <Text style={styles.doneButtonText}>Done Selecting</Text>
+             </TouchableOpacity>
+           )}
         </View>
       )}
 
-      <ScrollView style={styles.scrollView}>
-        {editingUsers && cohort.status === CohortStatus.NOT_DEPLOYED && (
-          <View style={styles.userSelectionSection}>
-            <Text style={styles.sectionTitle}>Select Players for This Cohort</Text>
-            {users.length === 0 ? (
-              <Text style={styles.emptyText}>No players registered yet. Register players first.</Text>
-            ) : (
-              users.map((user) => {
-                const isSelected = selectedUserIds.includes(user.id);
-                const bracketCount = userBracketCounts[user.id] || user.numBrackets || 1;
-                const inputValue = bracketCountInputs[user.id] !== undefined 
-                  ? bracketCountInputs[user.id] 
-                  : bracketCount.toString();
-                
-                return (
-                  <View key={user.id} style={styles.userCardWrapper}>
-                    <TouchableOpacity
-                      style={[
-                        styles.userCard,
-                        isSelected && styles.userCardSelected,
-                      ]}
-                      onPress={() => handleToggleUser(user.id)}
-                    >
-                      <View style={styles.userCardContent}>
-                        <Text style={[styles.userName, isSelected && styles.userNameSelected]}>
-                          {user.name}
-                        </Text>
-                        <Text style={styles.userInfo}>
-                          Avg: {user.average} | Handicap: {user.handicap}
-                        </Text>
+      <ScrollView style={styles.content}>
+        
+        {/* PLAYER SELECTION MODE */}
+        {editingMode && cohort.status === CohortStatus.NOT_DEPLOYED && (
+          <View style={styles.selectionContainer}>
+            <TextInput 
+              style={styles.searchInput}
+              placeholder="Search players..."
+              placeholderTextColor={Colors.textLight}
+              value={playerSearch}
+              onChangeText={setPlayerSearch}
+            />
+            {filteredUsers.map(user => {
+              const isSelected = selectedUserIds.includes(user.id);
+              const bracketCount = cohort.userBracketCounts?.[user.id] || 1;
+              
+              return (
+                <View key={user.id} style={[styles.playerRow, isSelected && styles.playerRowSelected]}>
+                  <TouchableOpacity 
+                    style={styles.playerCheckArea} 
+                    onPress={() => toggleUserSelection(user.id)}
+                  >
+                    <View style={[styles.checkBox, isSelected && styles.checkBoxActive]}>
+                       {isSelected && <Text style={styles.checkMark}>✓</Text>}
+                    </View>
+                    <View>
+                      <Text style={[styles.playerName, isSelected && styles.playerNameSelected]}>{user.name}</Text>
+                      <Text style={styles.playerDetails}>Avg: {user.average} • Hdcp: {user.handicap}</Text>
+                    </View>
+                  </TouchableOpacity>
+                  
+                  {isSelected && (
+                    <View style={styles.stepper}>
+                      <TouchableOpacity onPress={() => updateBracketCount(user.id, -1)} style={styles.stepBtn}>
+                        <Text style={styles.stepBtnText}>-</Text>
+                      </TouchableOpacity>
+                      <View style={styles.countContainer}>
+                         <Text style={styles.countText}>{bracketCount}</Text>
+                         <Text style={styles.countLabel}>Brackets</Text>
                       </View>
-                      {isSelected && (
-                        <View style={styles.checkmark}>
-                          <Text style={styles.checkmarkText}>✓</Text>
-                        </View>
-                      )}
-                    </TouchableOpacity>
-                    {isSelected && (
-                      <View style={styles.bracketCountSection}>
-                        <Text style={styles.bracketCountLabel}>Number of Brackets:</Text>
-                        <TextInput
-                          style={styles.bracketCountInput}
-                          value={inputValue}
-                          onChangeText={(value) => handleBracketCountChange(user.id, value)}
-                          onBlur={() => handleBracketCountBlur(user.id)}
-                          keyboardType="numeric"
-                          placeholder="1"
-                          placeholderTextColor={Colors.textLight}
-                        />
-                      </View>
-                    )}
-                  </View>
-                );
-              })
-            )}
+                      <TouchableOpacity onPress={() => updateBracketCount(user.id, 1)} style={styles.stepBtn}>
+                        <Text style={styles.stepBtnText}>+</Text>
+                      </TouchableOpacity>
+                    </View>
+                  )}
+                </View>
+              );
+            })}
+             <View style={{height: 100}} />
           </View>
         )}
 
-        {brackets.length === 0 ? (
-          <View style={styles.emptyState}>
-            <Text style={styles.emptyText}>
-              {cohort.status === CohortStatus.NOT_DEPLOYED
-                ? 'Select players and deploy the tournament to create brackets.'
-                : 'No brackets yet. Deploy the tournament to create brackets.'}
-            </Text>
-          </View>
-        ) : (
-          <>
-            <Text style={styles.sectionTitle}>Brackets</Text>
-            {brackets.map((bracket) => (
-              <TouchableOpacity
-                key={bracket.id}
-                style={styles.bracketCard}
-                onPress={() =>
-                  router.push({
+        {/* BRACKET DISPLAY MODE */}
+        {!editingMode && (
+          <View style={styles.bracketsList}>
+            {brackets.length === 0 ? (
+              <View style={styles.emptyBrackets}>
+                 <Text style={styles.infoText}>
+                   {cohort.status === CohortStatus.NOT_DEPLOYED 
+                     ? "Ready to setup? Tap 'Select Players' above." 
+                     : "No brackets generated."}
+                 </Text>
+              </View>
+            ) : (
+              brackets.map((bracket) => (
+                <TouchableOpacity
+                  key={bracket.id}
+                  style={styles.bracketCard}
+                  onPress={() => router.push({
                     pathname: '/bracket-edit',
                     params: { bracketId: bracket.id, cohortId: cohort.id },
-                  })
-                }
-              >
-                <Text style={styles.bracketTitle}>Bracket {bracket.bracketNumber}</Text>
-                <Text style={styles.bracketInfo}>
-                  Players: {bracket.players.length} | Status:{' '}
-                  {bracket.structure.completed ? 'Complete' : 'Active'}
-                </Text>
-                {bracket.structure.winner && (
-                  <Text style={styles.winnerText}>
-                    Winner: {bracket.structure.winner.name}
+                  })}
+                >
+                  <View style={styles.bracketCardHeader}>
+                    <Text style={styles.bracketTitle}>Bracket #{bracket.bracketNumber}</Text>
+                    {bracket.structure.completed ? (
+                      <View style={styles.badgeComplete}><Text style={styles.badgeText}>Completed</Text></View>
+                    ) : (
+                      <View style={styles.badgeActive}><Text style={styles.badgeText}>In Progress</Text></View>
+                    )}
+                  </View>
+                  <Text style={styles.bracketSubtitle}>
+                    {bracket.players.length} Players • {bracket.players.map(p => p.name).slice(0, 3).join(', ')}...
                   </Text>
-                )}
-              </TouchableOpacity>
-            ))}
-          </>
+                  {bracket.structure.winner && (
+                    <View style={styles.winnerBanner}>
+                      <Text style={styles.winnerText}>🏆 Won by {bracket.structure.winner.name}</Text>
+                    </View>
+                  )}
+                </TouchableOpacity>
+              ))
+            )}
+          </View>
         )}
       </ScrollView>
     </SafeAreaView>
@@ -292,42 +237,49 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  infoSection: {
-    backgroundColor: Colors.surface,
-    padding: 16,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
-  },
-  infoText: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    marginBottom: 4,
-  },
-  actionSection: {
+  dashboard: {
     flexDirection: 'row',
-    padding: 16,
-    gap: 12,
     backgroundColor: Colors.surface,
+    paddingVertical: 16,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
-  actionButton: {
+  statBox: {
     flex: 1,
-    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    borderRightWidth: 1,
+    borderRightColor: Colors.border,
+  },
+  statValue: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: Colors.primary,
+  },
+  statLabel: {
+    fontSize: 10,
+    color: Colors.textSecondary,
+    marginTop: 4,
+    textTransform: 'uppercase',
+  },
+  actionBar: {
+    padding: 16,
+    flexDirection: 'column',
+    gap: 12,
+    backgroundColor: Colors.surfaceSecondary,
+  },
+  primaryButton: {
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.primary,
     padding: 12,
     borderRadius: 8,
     alignItems: 'center',
   },
-  actionButtonActive: {
-    backgroundColor: Colors.accent,
-  },
-  actionButtonText: {
-    color: Colors.white,
-    fontSize: 14,
-    fontWeight: '600',
+  primaryButtonText: {
+    color: Colors.primary,
+    fontWeight: 'bold',
   },
   deployButton: {
-    flex: 1,
     backgroundColor: Colors.success,
     padding: 12,
     borderRadius: 8,
@@ -335,214 +287,187 @@ const styles = StyleSheet.create({
   },
   deployButtonText: {
     color: Colors.white,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  scrollView: {
-    flex: 1,
-  },
-  userSelectionSection: {
-    padding: 16,
-  },
-  sectionTitle: {
-    fontSize: 18,
     fontWeight: 'bold',
-    color: Colors.textPrimary,
-    marginBottom: 12,
   },
-  userCardWrapper: {
-    marginBottom: 8,
-  },
-  userCard: {
-    backgroundColor: Colors.surface,
+  doneButton: {
+    backgroundColor: Colors.primary,
     padding: 12,
     borderRadius: 8,
-    borderWidth: 2,
+    alignItems: 'center',
+  },
+  doneButtonText: {
+    color: Colors.white,
+    fontWeight: 'bold',
+  },
+  
+  // Selection
+  selectionContainer: {
+    padding: 16,
+  },
+  searchInput: {
+    backgroundColor: Colors.surface,
+    borderRadius: 8,
+    padding: 12,
+    color: Colors.white,
+    marginBottom: 16,
+    borderWidth: 1,
     borderColor: Colors.border,
+  },
+  playerRow: {
+    backgroundColor: Colors.surface,
+    marginBottom: 8,
+    borderRadius: 8,
+    padding: 12,
+    flexDirection: 'column', // Changed to column to accommodate stepper
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  playerRowSelected: {
+    borderColor: Colors.success,
+    backgroundColor: 'rgba(16, 185, 129, 0.05)',
+  },
+  playerCheckArea: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
   },
-  userCardSelected: {
-    borderColor: Colors.primary,
-    backgroundColor: Colors.surfaceSecondary,
-  },
-  userCardContent: {
-    flex: 1,
-  },
-  userName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.textPrimary,
-    marginBottom: 4,
-  },
-  userNameSelected: {
-    color: Colors.primary,
-  },
-  userInfo: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-  },
-  checkmark: {
+  checkBox: {
     width: 24,
     height: 24,
     borderRadius: 12,
-    backgroundColor: Colors.success,
+    borderWidth: 2,
+    borderColor: Colors.textLight,
+    marginRight: 12,
     alignItems: 'center',
     justifyContent: 'center',
-    marginLeft: 12,
   },
-  checkmarkText: {
+  checkBoxActive: {
+    backgroundColor: Colors.success,
+    borderColor: Colors.success,
+  },
+  checkMark: {
     color: Colors.white,
-    fontSize: 16,
+    fontSize: 14,
     fontWeight: 'bold',
   },
-  bracketCountSection: {
+  playerName: {
+    color: Colors.textPrimary,
+    fontSize: 16,
+    fontWeight: '600',
+  },
+  playerNameSelected: {
+    color: Colors.success,
+  },
+  playerDetails: {
+    color: Colors.textSecondary,
+    fontSize: 12,
+  },
+  stepper: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
-    marginTop: 8,
-    padding: 8,
-    backgroundColor: Colors.background,
-    borderRadius: 6,
+    justifyContent: 'center',
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
   },
-  bracketCountLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    color: Colors.textPrimary,
-    flex: 1,
-  },
-  bracketCountInput: {
-    backgroundColor: Colors.surface,
+  stepBtn: {
+    width: 32,
+    height: 32,
+    borderRadius: 16,
+    backgroundColor: Colors.surfaceSecondary,
+    alignItems: 'center',
+    justifyContent: 'center',
     borderWidth: 1,
     borderColor: Colors.border,
-    borderRadius: 6,
-    padding: 8,
-    fontSize: 14,
-    color: Colors.textPrimary,
-    minWidth: 60,
-    textAlign: 'center',
   },
-  emptyState: {
-    padding: 40,
+  stepBtnText: {
+    color: Colors.white,
+    fontSize: 18,
+    fontWeight: 'bold',
+    marginTop: -2,
+  },
+  countContainer: {
     alignItems: 'center',
+    paddingHorizontal: 16,
+    width: 80,
   },
-  emptyText: {
-    fontSize: 16,
+  countText: {
+    color: Colors.white,
+    fontSize: 18,
+    fontWeight: 'bold',
+  },
+  countLabel: {
     color: Colors.textSecondary,
+    fontSize: 10,
+  },
+  
+  // Brackets List
+  bracketsList: {
+    padding: 16,
+  },
+  emptyBrackets: {
+    alignItems: 'center',
+    padding: 40,
+  },
+  infoText: {
+    color: Colors.textSecondary,
+    fontSize: 16,
     textAlign: 'center',
   },
   bracketCard: {
     backgroundColor: Colors.surface,
-    margin: 16,
-    marginTop: 0,
+    marginBottom: 16,
+    borderRadius: 12,
     padding: 16,
-    borderRadius: 8,
     borderWidth: 1,
     borderColor: Colors.border,
+    shadowColor: Colors.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    elevation: 3,
+  },
+  bracketCardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
   },
   bracketTitle: {
     fontSize: 18,
     fontWeight: 'bold',
-    color: Colors.textPrimary,
-    marginBottom: 8,
+    color: Colors.white,
   },
-  bracketInfo: {
-    fontSize: 14,
+  badgeActive: {
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  badgeComplete: {
+    backgroundColor: Colors.success,
+    paddingHorizontal: 8,
+    paddingVertical: 2,
+    borderRadius: 4,
+  },
+  badgeText: {
+    color: Colors.white,
+    fontSize: 10,
+    fontWeight: 'bold',
+    textTransform: 'uppercase',
+  },
+  bracketSubtitle: {
     color: Colors.textSecondary,
-    marginBottom: 4,
+    fontSize: 12,
+  },
+  winnerBanner: {
+    marginTop: 12,
+    paddingTop: 12,
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
   },
   winnerText: {
-    fontSize: 14,
-    color: Colors.success,
-    fontWeight: '600',
-    marginTop: 8,
-  },
-  errorContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 20,
-  },
-  errorText: {
-    fontSize: 18,
-    color: Colors.textPrimary,
-    marginBottom: 20,
-  },
-  button: {
-    backgroundColor: Colors.primary,
-    padding: 16,
-    borderRadius: 8,
-    minWidth: 120,
-    alignItems: 'center',
-  },
-  buttonText: {
-    color: Colors.white,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContent: {
-    backgroundColor: Colors.surface,
-    borderRadius: 12,
-    padding: 24,
-    width: '80%',
-    maxWidth: 400,
-  },
-  modalTitle: {
-    fontSize: 20,
+    color: Colors.accent,
     fontWeight: 'bold',
-    color: Colors.textPrimary,
-    marginBottom: 8,
-  },
-  modalSubtitle: {
-    fontSize: 16,
-    color: Colors.textSecondary,
-    marginBottom: 20,
-  },
-  modalLabel: {
     fontSize: 14,
-    fontWeight: '600',
-    color: Colors.textPrimary,
-    marginBottom: 8,
-  },
-  modalInput: {
-    backgroundColor: Colors.background,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
-    color: Colors.textPrimary,
-    marginBottom: 20,
-  },
-  modalButtons: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  modalButton: {
-    flex: 1,
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  modalButtonCancel: {
-    backgroundColor: Colors.border,
-  },
-  modalButtonSave: {
-    backgroundColor: Colors.primary,
-  },
-  modalButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.textPrimary,
-  },
-  modalButtonTextSave: {
-    color: Colors.white,
   },
 });

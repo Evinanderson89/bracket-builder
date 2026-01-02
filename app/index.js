@@ -17,13 +17,6 @@ export default function HomeScreen() {
         <View style={styles.buttonContainer}>
           <TouchableOpacity
             style={styles.button}
-            onPress={() => router.push('/register')}
-          >
-            <Text style={styles.buttonText}>Register Players</Text>
-          </TouchableOpacity>
-          
-          <TouchableOpacity
-            style={styles.button}
             onPress={() => router.push('/players')}
           >
             <Text style={styles.buttonText}>Manage Players</Text>

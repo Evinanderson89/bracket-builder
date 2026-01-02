@@ -5,15 +5,17 @@ import {
   StyleSheet,
   ScrollView,
   SafeAreaView,
-  Dimensions,
   TouchableOpacity,
+  Dimensions,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useApp } from '../context/AppContext';
 import { Colors } from '../styles/colors';
 import NavigationHeader from '../components/NavigationHeader';
 
-const { width } = Dimensions.get('window');
+const CARD_HEIGHT = 70;
+const CARD_WIDTH = 180;
+const CARD_GAP = 20; // Vertical gap between cards in the first round
 
 export default function BracketEditScreen() {
   const { bracketId, cohortId } = useLocalSearchParams();
@@ -33,443 +35,231 @@ export default function BracketEditScreen() {
     );
   }
 
-  // Get all players who participated in each round
-  const getPlayersInRound = (roundIndex) => {
-    // For Round 1 (Game 1), show all 8 players from the bracket
-    if (roundIndex === 0) {
-      // Return all unique players from bracket.players
-      const uniquePlayers = [];
-      const seenIds = new Set();
-      bracket.players.forEach(player => {
-        if (player && !seenIds.has(player.id)) {
-          uniquePlayers.push(player);
-          seenIds.add(player.id);
-        }
-      });
-      return uniquePlayers;
-    }
-    
-    // For other rounds, get players from matches
-    const round = bracket.structure.rounds[roundIndex];
-    if (!round || !Array.isArray(round)) return [];
-    
-    const players = [];
-    const seenIds = new Set();
-    round.forEach(match => {
-      if (match.player1 && !seenIds.has(match.player1.id)) {
-        players.push(match.player1);
-        seenIds.add(match.player1.id);
-      }
-      if (match.player2 && !seenIds.has(match.player2.id)) {
-        players.push(match.player2);
-        seenIds.add(match.player2.id);
-      }
-    });
-    return players;
-  };
+  // --- Helper Functions ---
 
-  // Get player's game score for a specific round
   const getPlayerGameScore = (playerId, gameNumber) => {
-    if (!cohortId) return null;
+    if (!cohortId || !playerId) return null;
     const games = getPlayerGames(cohortId, playerId);
     const game = games.find(g => g.gameNumber === gameNumber);
     return game?.score;
   };
 
-  const renderPlayerSlot = (player, isWinner, isLoser, score, gameNumber, roundIndex, matchCompleted, hasAdvanced, bothScoresEntered) => {
-    const hasScore = score !== undefined && score !== null;
-    const totalScore = cohort.type === 'Handicap' && hasScore
-      ? score + (player?.handicap || 0)
-      : score;
+  const getMatchStatus = (match) => {
+    if (!match) return 'tbd';
+    if (match.completed) return 'completed';
+    if (match.player1 && match.player2) return 'ready';
+    return 'waiting';
+  };
+
+  // --- Components ---
+
+  const MatchCard = ({ match, roundIndex, matchIndex }) => {
+    const gameNumber = roundIndex + 1;
+    
+    // Helper to render a single player row within the card
+    const PlayerRow = ({ player, opponent, isTop }) => {
+      const score = player ? getPlayerGameScore(player.id, gameNumber) : null;
+      const opponentScore = opponent ? getPlayerGameScore(opponent.id, gameNumber) : null;
+      
+      const isWinner = match?.winner?.id === player?.id;
+      const isLoser = match?.completed && !isWinner && player;
+      
+      // Calculate display score (with handicap)
+      let displayScore = score;
+      let totalScore = score;
+      if (player && score !== null && score !== undefined && cohort.type === 'Handicap') {
+         totalScore = score + (player.handicap || 0);
+      }
+      
+      const hasScore = score !== null && score !== undefined;
+
+      return (
+        <View style={[
+          styles.playerRow, 
+          isWinner && styles.playerRowWinner,
+          !player && styles.playerRowEmpty
+        ]}>
+          <View style={styles.nameContainer}>
+            <Text style={[
+              styles.playerName, 
+              isWinner && styles.textWinner,
+              isLoser && styles.textLoser
+            ]} numberOfLines={1}>
+              {player ? player.name : 'TBD'}
+            </Text>
+            {player && (
+              <Text style={styles.playerDetails}>
+                Avg: {player.average} {cohort.type === 'Handicap' ? `| Hdcp: ${player.handicap}` : ''}
+              </Text>
+            )}
+          </View>
+          
+          <View style={styles.scoreContainer}>
+            {hasScore ? (
+              <View style={styles.scoreBadge}>
+                <Text style={[styles.scoreText, isWinner && styles.textWinner]}>
+                  {totalScore}
+                </Text>
+              </View>
+            ) : (
+              <Text style={styles.noScore}>-</Text>
+            )}
+          </View>
+        </View>
+      );
+    };
 
     return (
-      <View
-        style={[
-          styles.playerSlot,
-          isWinner && styles.winnerSlot,
-          isLoser && styles.loserSlot,
-          !player && styles.emptySlot,
-        ]}
-      >
-        {player ? (
-          <>
-            <View style={styles.playerSlotContent}>
-              <View style={styles.playerNameColumn}>
-                <Text
-                  style={[
-                    styles.playerName,
-                    isWinner && styles.winnerName,
-                    isLoser && styles.loserName,
-                  ]}
-                  numberOfLines={1}
-                >
-                  {isLoser && '❌ '}
-                  {player.name}
-                </Text>
-                <Text style={styles.playerInfo}>
-                  Avg: {player.average} | Hdcp: {player.handicap}
-                </Text>
-              </View>
-              <View style={styles.playerScoreColumn}>
-                {hasScore ? (
-                  // Show score calculation when score is entered
-                  <Text style={styles.scoreText}>
-                    {cohort.type === 'Handicap' ? (
-                      <Text>
-                        <Text style={styles.scoreValue}>{score}</Text>
-                        <Text style={styles.plusSign}>+</Text>
-                        <Text style={styles.handicapValue}>{player.handicap || 0}</Text>
-                        <Text style={styles.equalsSign}>=</Text>
-                        <Text style={[styles.totalValue, isWinner && styles.winnerTotal]}>
-                          {totalScore}
-                        </Text>
-                      </Text>
-                    ) : (
-                      <Text style={[styles.scoreValue, isWinner && styles.winnerTotal]}>
-                        {score}
-                      </Text>
-                    )}
-                  </Text>
-                ) : (
-                  <Text style={styles.noScoreText}>-</Text>
-                )}
-              </View>
-            </View>
-            {isWinner && (
-              <View style={styles.winnerBadge}>
-                <Text style={styles.winnerBadgeText}>✓</Text>
-              </View>
-            )}
-          </>
-        ) : (
-          <Text style={styles.tbdText}>TBD</Text>
+      <View style={styles.matchCardContainer}>
+        <View style={styles.matchCardHeader}>
+          <Text style={styles.matchCardTitle}>Game {gameNumber}</Text>
+        </View>
+        <View style={styles.matchCardContent}>
+          <PlayerRow player={match?.player1} opponent={match?.player2} isTop={true} />
+          <View style={styles.vsDivider} />
+          <PlayerRow player={match?.player2} opponent={match?.player1} isTop={false} />
+        </View>
+        {match?.completed && (
+          <View style={styles.matchStatusIcon}>
+             <Text style={styles.checkIcon}>✓</Text>
+          </View>
         )}
       </View>
     );
   };
 
-  const renderStepLadderBracket = () => {
-    const rounds = bracket.structure.rounds;
-    const isComplete = bracket.structure.completed;
-    const champion = bracket.structure.winner;
-
-    return (
-      <ScrollView 
-        horizontal 
-        showsHorizontalScrollIndicator={true}
-        contentContainerStyle={styles.horizontalScrollContent}
-      >
-        <View style={styles.stepLadderContainer}>
-          {/* Round 1 - Leftmost (8 players, 4 matches) */}
-          <View style={[styles.roundColumn, { minHeight: 600 }]}>
-            <View style={styles.roundHeader}>
-              <Text style={styles.roundTitle}>Round 1</Text>
-              <Text style={styles.roundSubtitle}>Game 1</Text>
-            </View>
-            <View style={styles.matchesContainer}>
-              {rounds[0] && rounds[0].map((match, index) => {
-                const player1IsWinner = match.winner?.id === match.player1?.id;
-                const player2IsWinner = match.winner?.id === match.player2?.id;
-                const player1IsLoser = match.completed && !player1IsWinner;
-                const player2IsLoser = match.completed && !player2IsWinner;
-                
-                // Check if both scores are entered
-                const player1Score = match.player1?.score;
-                const player2Score = match.player2?.score;
-                const bothScoresEntered = (player1Score !== undefined && player1Score !== null) && 
-                                         (player2Score !== undefined && player2Score !== null);
-
-                return (
-                  <View key={index} style={styles.matchContainer}>
-                    {renderPlayerSlot(
-                      match.player1,
-                      player1IsWinner,
-                      player1IsLoser,
-                      player1Score,
-                      1,
-                      0,
-                      match.completed,
-                      true,
-                      bothScoresEntered
-                    )}
-                    <View style={styles.vsDivider} />
-                    {renderPlayerSlot(
-                      match.player2,
-                      player2IsWinner,
-                      player2IsLoser,
-                      player2Score,
-                      1,
-                      0,
-                      match.completed,
-                      true,
-                      bothScoresEntered
-                    )}
-                  </View>
-                );
-              })}
-            </View>
-            {/* Show all players in Round 1 */}
-            <View style={styles.allPlayersInRound}>
-              <Text style={styles.allPlayersLabel}>All Players in Game 1:</Text>
-              {getPlayersInRound(0).map((player, idx) => {
-                const score = getPlayerGameScore(player.id, 1);
-                const isWinner = rounds[0]?.some(m => m.winner?.id === player.id);
-                return (
-                  <View key={idx} style={[styles.playerInRound, isWinner && styles.winnerInRound]}>
-                    <Text style={[styles.playerInRoundText, isWinner && styles.winnerInRoundText]}>
-                      {isWinner && '🏆 '}
-                      {player.name}
-                      {score !== undefined && score !== null && (
-                        <Text style={styles.playerScore}>
-                          {' '}({score}
-                          {cohort.type === 'Handicap' && `+${player.handicap || 0}=${score + (player.handicap || 0)}`}
-                          )
-                        </Text>
-                      )}
-                    </Text>
-                  </View>
-                );
-              })}
-            </View>
-          </View>
-
-          {/* Arrow pointing right */}
-          <View style={styles.arrowContainer}>
-            <Text style={styles.arrowText}>→</Text>
-          </View>
-
-          {/* Round 2 - Middle (4 players, 2 matches) */}
-          <View style={[styles.roundColumn, styles.round2Column, { minHeight: 600 }]}>
-            <View style={[styles.roundHeader, styles.round2Header]}>
-              <Text style={styles.roundTitle}>Round 2</Text>
-              <Text style={styles.roundSubtitle}>Game 2</Text>
-            </View>
-            <View style={styles.matchesContainer}>
-              {rounds[1] && rounds[1].map((match, index) => {
-                const player1IsWinner = match.winner?.id === match.player1?.id;
-                const player2IsWinner = match.winner?.id === match.player2?.id;
-                const player1IsLoser = match.completed && !player1IsWinner;
-                const player2IsLoser = match.completed && !player2IsWinner;
-
-                // Check if both scores are entered
-                const player1Score = match.player1?.score;
-                const player2Score = match.player2?.score;
-                const bothScoresEntered = (player1Score !== undefined && player1Score !== null) && 
-                                         (player2Score !== undefined && player2Score !== null);
-
-                return (
-                  <View key={index} style={styles.matchContainer}>
-                    {renderPlayerSlot(
-                      match.player1,
-                      player1IsWinner,
-                      player1IsLoser,
-                      player1Score,
-                      2,
-                      1,
-                      match.completed,
-                      true,
-                      bothScoresEntered
-                    )}
-                    <View style={styles.vsDivider} />
-                    {renderPlayerSlot(
-                      match.player2,
-                      player2IsWinner,
-                      player2IsLoser,
-                      player2Score,
-                      2,
-                      1,
-                      match.completed,
-                      true,
-                      bothScoresEntered
-                    )}
-                  </View>
-                );
-              })}
-            </View>
-            {/* Show all players in Round 2 */}
-            <View style={styles.allPlayersInRound}>
-              <Text style={styles.allPlayersLabel}>All Players in Game 2:</Text>
-              {getPlayersInRound(1).map((player, idx) => {
-                const score = getPlayerGameScore(player.id, 2);
-                const isWinner = rounds[1]?.some(m => m.winner?.id === player.id);
-                return (
-                  <View key={player.id || idx} style={[styles.playerInRound, isWinner && styles.winnerInRound]}>
-                    <Text style={[styles.playerInRoundText, isWinner && styles.winnerInRoundText]}>
-                      {isWinner && '🏆 '}
-                      {player.name}
-                      {score !== undefined && score !== null && (
-                        <Text style={styles.playerScore}>
-                          {' '}({score}
-                          {cohort.type === 'Handicap' && `+${player.handicap || 0}=${score + (player.handicap || 0)}`}
-                          )
-                        </Text>
-                      )}
-                    </Text>
-                  </View>
-                );
-              })}
-            </View>
-          </View>
-
-          {/* Arrow pointing right */}
-          <View style={styles.arrowContainer}>
-            <Text style={styles.arrowText}>→</Text>
-          </View>
-
-          {/* Round 3 - Final (2 players, 1 match) */}
-          <View style={[styles.roundColumn, styles.round3Column, { minHeight: 600 }]}>
-            <View style={[styles.roundHeader, styles.round3Header]}>
-              <Text style={styles.roundTitle}>Final</Text>
-              <Text style={styles.roundSubtitle}>Game 3</Text>
-            </View>
-            <View style={styles.matchesContainer}>
-              {rounds[2] && rounds[2].map((match, index) => {
-                const player1IsWinner = match.winner?.id === match.player1?.id;
-                const player2IsWinner = match.winner?.id === match.player2?.id;
-                const player1IsLoser = match.completed && !player1IsWinner;
-                const player2IsLoser = match.completed && !player2IsWinner;
-
-                // Check if both scores are entered
-                const player1Score = match.player1?.score;
-                const player2Score = match.player2?.score;
-                const bothScoresEntered = (player1Score !== undefined && player1Score !== null) && 
-                                         (player2Score !== undefined && player2Score !== null);
-
-                return (
-                  <View key={index} style={styles.matchContainer}>
-                    {renderPlayerSlot(
-                      match.player1,
-                      player1IsWinner,
-                      player1IsLoser,
-                      player1Score,
-                      3,
-                      2,
-                      match.completed,
-                      true,
-                      bothScoresEntered
-                    )}
-                    <View style={styles.vsDivider} />
-                    {renderPlayerSlot(
-                      match.player2,
-                      player2IsWinner,
-                      player2IsLoser,
-                      player2Score,
-                      3,
-                      2,
-                      match.completed,
-                      true,
-                      bothScoresEntered
-                    )}
-                  </View>
-                );
-              })}
-            </View>
-            {/* Show all players in Round 3 */}
-            <View style={styles.allPlayersInRound}>
-              <Text style={styles.allPlayersLabel}>All Players in Game 3:</Text>
-              {getPlayersInRound(2).map((player, idx) => {
-                const score = getPlayerGameScore(player.id, 3);
-                const isWinner = rounds[2]?.some(m => m.winner?.id === player.id);
-                return (
-                  <View key={player.id || idx} style={[styles.playerInRound, isWinner && styles.winnerInRound]}>
-                    <Text style={[styles.playerInRoundText, isWinner && styles.winnerInRoundText]}>
-                      {isWinner && '🏆 '}
-                      {player.name}
-                      {score !== undefined && score !== null && (
-                        <Text style={styles.playerScore}>
-                          {' '}({score}
-                          {cohort.type === 'Handicap' && `+${player.handicap || 0}=${score + (player.handicap || 0)}`}
-                          )
-                        </Text>
-                      )}
-                    </Text>
-                  </View>
-                );
-              })}
-            </View>
-          </View>
-
-          {/* Arrow pointing right */}
-          <View style={styles.arrowContainer}>
-            <Text style={styles.arrowText}>→</Text>
-          </View>
-
-          {/* Champion - Rightmost */}
-          <View style={[styles.championColumn, { minHeight: 600 }]}>
-            <View style={styles.championHeader}>
-              <Text style={styles.championTitle}>🏆</Text>
-              <Text style={styles.championLabel}>CHAMPION</Text>
-            </View>
-            {isComplete && champion ? (
-              <View style={styles.championCard}>
-                <Text style={styles.championName}>{champion.name}</Text>
-                <Text style={styles.championSubtext}>Winner</Text>
-              </View>
-            ) : (
-              <View style={styles.championCard}>
-                <Text style={styles.tbdText}>TBD</Text>
-              </View>
-            )}
-          </View>
+  const Connector = ({ isTop, height }) => {
+    // Draws the bracket lines connecting rounds
+    // height is the vertical distance between the two source matches
+    if (isTop) {
+      return (
+        <View style={[styles.connectorContainer, { height: height / 2, bottom: -1 }]}>
+          <View style={styles.connectorRightBottom} />
         </View>
-      </ScrollView>
+      );
+    }
+    return (
+      <View style={[styles.connectorContainer, { height: height / 2, top: -1 }]}>
+        <View style={styles.connectorRightTop} />
+      </View>
+    );
+  };
+
+  const renderBracketTree = () => {
+    const rounds = bracket.structure.rounds;
+    
+    // We render columns: [Round 1] [Connectors] [Round 2] [Connectors] [Round 3] ...
+    
+    return (
+      <View style={styles.treeContainer}>
+        {rounds.map((roundMatches, roundIndex) => {
+          // Calculate layout constants for this round
+          // The vertical spacing grows exponentially: 0->1x, 1->2x, 2->4x
+          const spacingMultiplier = Math.pow(2, roundIndex);
+          const roundGap = (CARD_HEIGHT + CARD_GAP) * spacingMultiplier;
+          const marginTop = ((roundGap - (CARD_HEIGHT + CARD_GAP)) / 2);
+
+          const isFinalRound = roundIndex === rounds.length - 1;
+
+          return (
+            <React.Fragment key={`round-${roundIndex}`}>
+              {/* MATCH COLUMN */}
+              <View style={[styles.roundColumn, { marginTop: roundIndex > 0 ? marginTop : 0 }]}>
+                <Text style={styles.columnHeader}>Round {roundIndex + 1}</Text>
+                {roundMatches.map((match, matchIndex) => (
+                  <View 
+                    key={`match-${roundIndex}-${matchIndex}`} 
+                    style={{ marginBottom: roundGap - CARD_HEIGHT }} // Dynamic spacing
+                  >
+                    <MatchCard 
+                      match={match} 
+                      roundIndex={roundIndex} 
+                      matchIndex={matchIndex} 
+                    />
+                  </View>
+                ))}
+              </View>
+
+              {/* CONNECTOR COLUMN (Draw lines to next round) */}
+              {!isFinalRound && (
+                <View style={[styles.connectorColumn, { marginTop: roundIndex > 0 ? marginTop : 0 }]}>
+                  {roundMatches.map((_, index) => {
+                     // We only draw connectors for every PAIR of matches
+                     if (index % 2 !== 0) return null;
+                     
+                     // Height covers the distance between this match and the next one
+                     const connectorHeight = roundGap; 
+                     
+                     return (
+                       <View key={`conn-${roundIndex}-${index}`} style={{ height: connectorHeight + (roundGap - CARD_HEIGHT), justifyContent: 'center' }}>
+                          <View style={styles.bracketConnector}>
+                              <View style={styles.connectorHorizontal} />
+                              <View style={[styles.connectorVertical, { height: connectorHeight }]} />
+                              <View style={styles.connectorHorizontal} />
+                          </View>
+                       </View>
+                     );
+                  })}
+                </View>
+              )}
+            </React.Fragment>
+          );
+        })}
+
+        {/* CHAMPION COLUMN */}
+        {bracket.structure.completed && bracket.structure.winner && (
+          <>
+            <View style={styles.connectorColumn}>
+               <View style={styles.finalConnector} />
+            </View>
+            <View style={[styles.roundColumn, styles.championColumn]}>
+              <Text style={styles.championHeader}>🏆 CHAMPION</Text>
+              <View style={styles.championCard}>
+                <Text style={styles.championEmoji}>👑</Text>
+                <Text style={styles.championName}>{bracket.structure.winner.name}</Text>
+                <Text style={styles.championSub}>WINNER</Text>
+              </View>
+            </View>
+          </>
+        )}
+      </View>
     );
   };
 
   return (
     <SafeAreaView style={styles.container}>
       <NavigationHeader title={`Bracket ${bracket.bracketNumber}`} />
-      <View style={styles.subtitleContainer}>
-        <Text style={styles.subtitle}>{cohort.name}</Text>
-        <View style={styles.typeBadge}>
-          <Text style={styles.typeText}>{cohort.type}</Text>
+      
+      {/* Subheader / Dashboard */}
+      <View style={styles.dashboard}>
+        <View>
+          <Text style={styles.cohortName}>{cohort.name}</Text>
+          <Text style={styles.bracketType}>{cohort.type} Tournament</Text>
         </View>
         <TouchableOpacity
-          style={styles.editScoresButton}
+          style={styles.actionButton}
           onPress={() => router.push({
             pathname: '/game-entry',
             params: { cohortId: cohortId }
           })}
         >
-          <Text style={styles.editScoresButtonText}>Edit Scores</Text>
+          <Text style={styles.actionButtonText}>Enter Scores</Text>
         </TouchableOpacity>
       </View>
 
+      {/* Main Bracket Canvas */}
       <ScrollView 
-        style={styles.mainScrollView}
-        contentContainerStyle={styles.mainScrollContent}
-        showsVerticalScrollIndicator={true}
+        style={styles.canvas} 
+        contentContainerStyle={styles.canvasContent}
+        maximumZoomScale={2.0}
+        minimumZoomScale={0.5}
+        indicatorStyle="white"
       >
-        <View style={styles.bracketWrapper}>
-          {renderStepLadderBracket()}
-        </View>
-
-        <View style={styles.allPlayersSection}>
-          <Text style={styles.allPlayersTitle}>👥 All Players in Bracket</Text>
-          <View style={styles.playersGrid}>
-            {bracket.players.map((player) => {
-              const isChampion = bracket.structure.completed && 
-                bracket.structure.winner?.id === player.id;
-              return (
-                <View
-                  key={player.id}
-                  style={[
-                    styles.playerChip,
-                    isChampion && styles.championChip,
-                  ]}
-                >
-                  <Text style={[styles.playerChipText, isChampion && styles.championChipText]}>
-                    {isChampion && '👑 '}
-                    {player.name}
-                  </Text>
-                  <Text style={styles.playerChipInfo}>
-                    Hdcp: {player.handicap}
-                  </Text>
-                </View>
-              );
-            })}
+        <ScrollView horizontal showsHorizontalScrollIndicator={true}>
+          <View style={styles.bracketPadding}>
+             {renderBracketTree()}
           </View>
-        </View>
+        </ScrollView>
       </ScrollView>
     </SafeAreaView>
   );
@@ -480,409 +270,272 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  subtitleContainer: {
+  dashboard: {
     backgroundColor: Colors.surface,
-    padding: 10,
-    alignItems: 'center',
+    padding: 16,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
     flexDirection: 'row',
-    justifyContent: 'center',
-    gap: 8,
-    flexWrap: 'wrap',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    shadowColor: Colors.shadow,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.3,
+    shadowRadius: 4,
+    elevation: 5,
+    zIndex: 10,
   },
-  editScoresButton: {
+  cohortName: {
+    fontSize: 18,
+    fontWeight: 'bold',
+    color: Colors.white,
+  },
+  bracketType: {
+    fontSize: 12,
+    color: Colors.accent,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    marginTop: 2,
+  },
+  actionButton: {
     backgroundColor: Colors.primary,
     paddingHorizontal: 16,
-    paddingVertical: 8,
-    borderRadius: 8,
-    marginLeft: 'auto',
+    paddingVertical: 10,
+    borderRadius: 20,
+    borderWidth: 1,
+    borderColor: Colors.primaryDark,
   },
-  editScoresButtonText: {
+  actionButtonText: {
     color: Colors.white,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  subtitle: {
-    fontSize: 13,
-    fontWeight: '600',
-    color: Colors.textPrimary,
-  },
-  typeBadge: {
-    backgroundColor: Colors.primary,
-    paddingHorizontal: 10,
-    paddingVertical: 3,
-    borderRadius: 10,
-  },
-  typeText: {
-    fontSize: 10,
     fontWeight: 'bold',
-    color: Colors.white,
+    fontSize: 12,
   },
-  mainScrollView: {
+  
+  // Canvas
+  canvas: {
     flex: 1,
-  },
-  mainScrollContent: {
-    flexGrow: 1,
-    paddingBottom: 10,
-  },
-  bracketWrapper: {
     backgroundColor: Colors.background,
-    paddingVertical: 8,
-    minHeight: 400,
   },
-  horizontalScrollContent: {
-    paddingHorizontal: 12,
-    paddingVertical: 8,
+  canvasContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
   },
-  stepLadderContainer: {
+  bracketPadding: {
+    padding: 40,
+    minWidth: Dimensions.get('window').width,
+  },
+  treeContainer: {
     flexDirection: 'row',
     alignItems: 'flex-start',
-    minWidth: width * 4.5,
   },
+  
+  // Columns
   roundColumn: {
-    minWidth: 280,
-    maxWidth: 280,
+    width: CARD_WIDTH,
     alignItems: 'center',
-    justifyContent: 'flex-start',
+    zIndex: 2,
   },
-  round2Column: {
-    paddingTop: 120, // Move down to align with top two matchups from Round 1
-  },
-  round3Column: {
-    paddingTop: 200, // Move down to align with the matchup from Round 2
-  },
-  roundHeader: {
-    backgroundColor: Colors.headerDark,
-    padding: 8,
-    borderRadius: 6,
-    marginBottom: 10,
-    width: '100%',
+  connectorColumn: {
+    width: 40, // Space for lines
     alignItems: 'center',
+    paddingTop: 30, // Align with center of cards roughly if needed, usually managed by flex
   },
-  round2Header: {
-    marginBottom: 20, // Extra spacing for Round 2
-  },
-  round3Header: {
-    marginBottom: 40, // Double spacing for Game 3
-  },
-  roundTitle: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: Colors.white,
-    marginBottom: 2,
-  },
-  roundSubtitle: {
+  columnHeader: {
+    color: Colors.textSecondary,
     fontSize: 10,
-    color: Colors.textLight,
+    textTransform: 'uppercase',
+    fontWeight: 'bold',
+    marginBottom: 12,
+    letterSpacing: 1,
   },
-  matchesContainer: {
-    width: '100%',
-    gap: 6,
-    marginBottom: 8,
-    flex: 1,
-    justifyContent: 'space-between',
-  },
-  matchContainer: {
+
+  // Match Card
+  matchCardContainer: {
+    width: CARD_WIDTH,
+    height: 90, // Slightly taller for header
     backgroundColor: Colors.surface,
-    borderRadius: 6,
-    padding: 6,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: Colors.border,
-    marginBottom: 6,
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.1,
-    shadowRadius: 2,
-    elevation: 2,
+    shadowColor: Colors.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.3,
+    shadowRadius: 3,
+    elevation: 4,
+    overflow: 'hidden',
   },
-  playerSlot: {
-    padding: 8,
-    borderRadius: 4,
-    borderWidth: 1.5,
-    borderColor: Colors.border,
-    backgroundColor: Colors.background,
-    marginBottom: 3,
-    minHeight: 55,
-    maxHeight: 65,
+  matchCardHeader: {
+    backgroundColor: Colors.surfaceSecondary,
+    paddingVertical: 2,
+    paddingHorizontal: 6,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  matchCardTitle: {
+    fontSize: 9,
+    color: Colors.textSecondary,
+    fontWeight: 'bold',
+  },
+  matchCardContent: {
+    flex: 1,
     justifyContent: 'center',
-    position: 'relative',
   },
-  playerSlotContent: {
+  playerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    width: '100%',
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    height: 32,
   },
-  playerNameColumn: {
+  playerRowWinner: {
+    backgroundColor: 'rgba(16, 185, 129, 0.1)', // Very faint green tint
+  },
+  playerRowEmpty: {
+    opacity: 0.5,
+  },
+  nameContainer: {
     flex: 1,
-    paddingRight: 8,
-    alignItems: 'flex-start',
-  },
-  playerScoreColumn: {
-    flex: 1,
-    alignItems: 'flex-end',
-  },
-  winnerSlot: {
-    backgroundColor: '#10b981',
-    borderColor: '#059669',
-    borderWidth: 3,
-  },
-  loserSlot: {
-    backgroundColor: Colors.surfaceSecondary,
-    opacity: 0.6,
-    borderColor: Colors.danger,
-    borderWidth: 2,
-  },
-  emptySlot: {
-    backgroundColor: Colors.background,
-    borderStyle: 'dashed',
   },
   playerName: {
-    fontSize: 11,
-    fontWeight: 'bold',
-    color: Colors.textPrimary,
-    textAlign: 'left',
-    marginBottom: 2,
-  },
-  playerInfo: {
-    fontSize: 9,
-    color: Colors.textSecondary,
-    textAlign: 'left',
-  },
-  winnerName: {
-    color: Colors.white,
     fontSize: 12,
-  },
-  loserName: {
-    color: Colors.danger,
-    textDecorationLine: 'line-through',
-    textDecorationColor: Colors.danger,
-    opacity: 0.7,
-  },
-  handicapText: {
-    fontSize: 9,
-    color: Colors.info,
-    fontWeight: '600',
-    textAlign: 'right',
-  },
-  scoreText: {
-    fontSize: 9,
-    color: Colors.textSecondary,
-    textAlign: 'right',
-  },
-  noScoreText: {
-    fontSize: 9,
-    color: Colors.textLight,
-    fontStyle: 'italic',
-  },
-  scoreValue: {
-    fontWeight: 'bold',
     color: Colors.textPrimary,
-    fontSize: 10,
+    fontWeight: '500',
   },
-  plusSign: {
-    color: Colors.textSecondary,
-    fontSize: 8,
-  },
-  handicapValue: {
-    color: Colors.info,
-    fontSize: 8,
-  },
-  equalsSign: {
-    color: Colors.textSecondary,
-    fontSize: 8,
-  },
-  totalValue: {
-    fontWeight: 'bold',
-    color: Colors.primary,
-    fontSize: 10,
-  },
-  winnerTotal: {
-    color: Colors.white,
-  },
-  gameLabel: {
-    fontSize: 8,
-    color: Colors.textLight,
-    marginTop: 1,
-  },
-  winnerBadge: {
-    position: 'absolute',
-    top: 2,
-    right: 2,
-    width: 16,
-    height: 16,
-    borderRadius: 8,
-    backgroundColor: Colors.white,
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  winnerBadgeText: {
+  textWinner: {
     color: Colors.success,
     fontWeight: 'bold',
-    fontSize: 11,
   },
-  tbdText: {
-    fontSize: 10,
-    color: Colors.textLight,
-    fontStyle: 'italic',
+  textLoser: {
+    color: Colors.textSecondary,
+    textDecorationLine: 'line-through',
   },
-  vsDivider: {
-    height: 1.5,
-    backgroundColor: Colors.border,
-    marginVertical: 3,
-    borderRadius: 1,
-  },
-  allPlayersInRound: {
-    width: '100%',
-    backgroundColor: Colors.surfaceSecondary,
-    padding: 6,
-    borderRadius: 6,
-    marginTop: 4,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    maxHeight: 120,
-  },
-  allPlayersLabel: {
-    fontSize: 9,
-    fontWeight: 'bold',
-    color: Colors.textPrimary,
-    marginBottom: 4,
-  },
-  playerInRound: {
-    padding: 3,
-    marginBottom: 2,
-    borderRadius: 3,
-    backgroundColor: Colors.background,
-  },
-  winnerInRound: {
-    backgroundColor: Colors.success,
-  },
-  playerInRoundText: {
-    fontSize: 9,
-    color: Colors.textPrimary,
-  },
-  winnerInRoundText: {
-    color: Colors.white,
-    fontWeight: 'bold',
-  },
-  playerScore: {
+  playerDetails: {
     fontSize: 8,
     color: Colors.textSecondary,
   },
-  arrowContainer: {
-    paddingHorizontal: 8,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 50,
+  scoreContainer: {
+    marginLeft: 8,
+    minWidth: 24,
+    alignItems: 'flex-end',
   },
-  arrowText: {
-    fontSize: 20,
-    color: Colors.primary,
-    fontWeight: 'bold',
+  scoreBadge: {
+    backgroundColor: Colors.background,
+    paddingHorizontal: 4,
+    paddingVertical: 2,
+    borderRadius: 4,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
-  championColumn: {
-    minWidth: 260,
-    maxWidth: 260,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingTop: 200, // Center with Round 3 matchup
-  },
-  championHeader: {
-    backgroundColor: Colors.success,
-    padding: 8,
-    borderRadius: 6,
-    marginBottom: 10,
-    width: '100%',
-    alignItems: 'center',
-  },
-  championTitle: {
-    fontSize: 18,
-    marginBottom: 2,
-  },
-  championLabel: {
+  scoreText: {
     fontSize: 11,
     fontWeight: 'bold',
+    color: Colors.textPrimary,
+  },
+  noScore: {
+    color: Colors.textLight,
+    fontSize: 12,
+  },
+  vsDivider: {
+    height: 1,
+    backgroundColor: Colors.border,
+    width: '100%',
+  },
+  matchStatusIcon: {
+    position: 'absolute',
+    right: 4,
+    top: 4,
+    backgroundColor: Colors.success,
+    width: 14,
+    height: 14,
+    borderRadius: 7,
+    justifyContent: 'center',
+    alignItems: 'center',
+  },
+  checkIcon: {
     color: Colors.white,
-    letterSpacing: 0.5,
+    fontSize: 9,
+    fontWeight: 'bold',
+  },
+
+  // Connectors
+  bracketConnector: {
+    width: '100%',
+    flexDirection: 'row',
+    alignItems: 'center',
+    opacity: 0.5,
+  },
+  connectorHorizontal: {
+    width: 10,
+    height: 2,
+    backgroundColor: Colors.bracketLine,
+  },
+  connectorVertical: {
+    width: 2,
+    backgroundColor: Colors.bracketLine,
+    height: '100%',
+  },
+  finalConnector: {
+    width: 40,
+    height: 2,
+    backgroundColor: Colors.accent,
+    marginTop: 65, // Adjust based on alignment
+  },
+  
+  // Champion
+  championColumn: {
+    marginTop: 'auto',
+    marginBottom: 'auto',
+    justifyContent: 'center',
+  },
+  championHeader: {
+    color: Colors.accent,
+    fontSize: 12,
+    fontWeight: 'bold',
+    marginBottom: 8,
+    textShadowColor: Colors.accent,
+    textShadowRadius: 10,
   },
   championCard: {
+    width: 140,
+    height: 140,
+    borderRadius: 70,
     backgroundColor: Colors.surface,
-    padding: 12,
-    borderRadius: 8,
-    borderWidth: 2,
-    borderColor: Colors.success,
-    width: '100%',
+    borderWidth: 3,
+    borderColor: Colors.accent,
+    justifyContent: 'center',
     alignItems: 'center',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.2,
-    shadowRadius: 4,
-    elevation: 4,
+    shadowColor: Colors.accent,
+    shadowOffset: { width: 0, height: 0 },
+    shadowOpacity: 0.5,
+    shadowRadius: 20,
+    elevation: 10,
+  },
+  championEmoji: {
+    fontSize: 40,
+    marginBottom: 4,
   },
   championName: {
     fontSize: 14,
     fontWeight: 'bold',
-    color: Colors.textPrimary,
-    marginBottom: 2,
-  },
-  championSubtext: {
-    fontSize: 11,
-    color: Colors.textSecondary,
-  },
-  allPlayersSection: {
-    padding: 8,
-    backgroundColor: Colors.surface,
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-  },
-  allPlayersTitle: {
-    fontSize: 12,
-    fontWeight: 'bold',
-    color: Colors.textPrimary,
-    marginBottom: 8,
-    textAlign: 'center',
-  },
-  playersGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 6,
-    justifyContent: 'center',
-  },
-  playerChip: {
-    backgroundColor: Colors.background,
-    padding: 6,
-    borderRadius: 6,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    minWidth: 80,
-    alignItems: 'center',
-  },
-  championChip: {
-    backgroundColor: Colors.success,
-    borderColor: Colors.success,
-    borderWidth: 2,
-  },
-  playerChipText: {
-    fontSize: 10,
-    fontWeight: '600',
-    color: Colors.textPrimary,
-    marginBottom: 1,
-  },
-  championChipText: {
     color: Colors.white,
+    textAlign: 'center',
+    paddingHorizontal: 10,
   },
-  playerChipInfo: {
-    fontSize: 8,
-    color: Colors.textSecondary,
+  championSub: {
+    fontSize: 10,
+    color: Colors.accent,
+    fontWeight: 'bold',
+    marginTop: 4,
+    letterSpacing: 1,
   },
+  
   errorContainer: {
     flex: 1,
     justifyContent: 'center',
     alignItems: 'center',
-    padding: 20,
   },
   errorText: {
-    fontSize: 18,
     color: Colors.textPrimary,
-  },
+  }
 });

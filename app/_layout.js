@@ -6,7 +6,6 @@ export default function RootLayout() {
     <AppProvider>
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Screen name="index" />
-        <Stack.Screen name="register" />
         <Stack.Screen name="players" />
         <Stack.Screen name="cohorts" />
         <Stack.Screen name="cohort-detail" />

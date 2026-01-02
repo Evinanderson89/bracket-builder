@@ -17,16 +17,21 @@ import NavigationHeader from '../components/NavigationHeader';
 
 export default function PlayersScreen() {
   const router = useRouter();
-  const { users, addUser, deleteUser, brackets, cohorts, getPlayerPayouts, payouts } = useApp();
+  const { users, addUser, updateUser, deleteUser, brackets, cohorts, getPlayerPayouts, payouts } = useApp();
   const [selectedUserId, setSelectedUserId] = useState(null);
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [userToDelete, setUserToDelete] = useState(null);
   const [userBrackets, setUserBrackets] = useState([]);
   const [showAddForm, setShowAddForm] = useState(false);
+  const [showEditForm, setShowEditForm] = useState(false);
+  const [editingUserId, setEditingUserId] = useState(null);
   const [sortBy, setSortBy] = useState('alphabetical'); // 'alphabetical', 'average', 'payout'
   const [newUserName, setNewUserName] = useState('');
   const [newUserAverage, setNewUserAverage] = useState('');
   const [newUserHandicap, setNewUserHandicap] = useState('');
+  const [editUserName, setEditUserName] = useState('');
+  const [editUserAverage, setEditUserAverage] = useState('');
+  const [editUserHandicap, setEditUserHandicap] = useState('');
 
   const isUserInActiveBracket = (userId) => {
     const activeCohorts = cohorts.filter(c => c.status === 'active');
@@ -92,10 +97,46 @@ export default function PlayersScreen() {
   };
 
   const handleEditUser = (user) => {
-    router.push({
-      pathname: '/register',
-      params: { userId: user.id }
-    });
+    setEditingUserId(user.id);
+    setEditUserName(user.name);
+    setEditUserAverage(user.average.toString());
+    setEditUserHandicap(user.handicap.toString());
+    setShowEditForm(true);
+  };
+
+  const handleSaveEdit = async () => {
+    if (!editUserName.trim() || !editUserAverage || !editUserHandicap) {
+      Alert.alert('Error', 'Please fill in all fields');
+      return;
+    }
+
+    // Check for duplicate name (excluding current user)
+    const nameLower = editUserName.trim().toLowerCase();
+    const existingUser = users.find(u => 
+      u.id !== editingUserId && 
+      u.name.trim().toLowerCase() === nameLower
+    );
+    if (existingUser) {
+      Alert.alert('Error', `User "${editUserName.trim()}" already exists. Please use a different name.`);
+      return;
+    }
+
+    try {
+      await updateUser(editingUserId, {
+        name: editUserName.trim(),
+        average: parseInt(editUserAverage, 10),
+        handicap: parseInt(editUserHandicap, 10),
+      });
+      Alert.alert('Success', 'Player updated successfully');
+      setShowEditForm(false);
+      setEditingUserId(null);
+      setEditUserName('');
+      setEditUserAverage('');
+      setEditUserHandicap('');
+      setSelectedUserId(null);
+    } catch (error) {
+      Alert.alert('Error', error.message || 'Failed to update player');
+    }
   };
 
   // Calculate total historical payout for a user
@@ -227,6 +268,70 @@ export default function PlayersScreen() {
               onPress={handleAddUser}
             >
               <Text style={styles.addFormSubmitButtonText}>Add Player</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      ) : showEditForm ? (
+        <View style={styles.addFormContainer}>
+          <View style={styles.addForm}>
+            <View style={styles.addFormHeader}>
+              <Text style={styles.addFormTitle}>Edit Player</Text>
+              <TouchableOpacity
+                style={styles.cancelAddButton}
+                onPress={() => {
+                  setShowEditForm(false);
+                  setEditingUserId(null);
+                  setEditUserName('');
+                  setEditUserAverage('');
+                  setEditUserHandicap('');
+                }}
+              >
+                <Text style={styles.cancelAddButtonText}>Cancel</Text>
+              </TouchableOpacity>
+            </View>
+            
+            <View style={styles.addFormFields}>
+              <View style={styles.addFormField}>
+                <Text style={styles.addFormLabel}>Name</Text>
+                <TextInput
+                  style={styles.addFormInput}
+                  value={editUserName}
+                  onChangeText={setEditUserName}
+                  placeholder="Enter player name"
+                  placeholderTextColor={Colors.textLight}
+                />
+              </View>
+              
+              <View style={styles.addFormField}>
+                <Text style={styles.addFormLabel}>Average</Text>
+                <TextInput
+                  style={styles.addFormInput}
+                  value={editUserAverage}
+                  onChangeText={setEditUserAverage}
+                  placeholder="Enter average"
+                  keyboardType="numeric"
+                  placeholderTextColor={Colors.textLight}
+                />
+              </View>
+              
+              <View style={styles.addFormField}>
+                <Text style={styles.addFormLabel}>Handicap</Text>
+                <TextInput
+                  style={styles.addFormInput}
+                  value={editUserHandicap}
+                  onChangeText={setEditUserHandicap}
+                  placeholder="Enter handicap"
+                  keyboardType="numeric"
+                  placeholderTextColor={Colors.textLight}
+                />
+              </View>
+            </View>
+            
+            <TouchableOpacity
+              style={styles.addFormSubmitButton}
+              onPress={handleSaveEdit}
+            >
+              <Text style={styles.addFormSubmitButtonText}>Save Changes</Text>
             </TouchableOpacity>
           </View>
         </View>

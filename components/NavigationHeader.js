@@ -5,7 +5,6 @@ import { Colors } from '../styles/colors';
 
 // Route mapping for fallback navigation
 const routeMap = {
-  '/register': '/',
   '/cohorts': '/',
   '/cohort-detail': '/cohorts',
   '/bracket-edit': '/cohorts',
