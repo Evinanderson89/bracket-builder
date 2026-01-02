@@ -33,6 +33,9 @@ export default function CohortDetailScreen() {
   const [activeTab, setActiveTab] = useState('brackets'); 
   const [rosterModalVisible, setRosterModalVisible] = useState(false);
   const [playerSearch, setPlayerSearch] = useState('');
+  
+  // NEW: Toggle for viewing completed brackets
+  const [showCompleted, setShowCompleted] = useState(false);
 
   const cohort = cohorts.find(c => c.id === cohortId);
   const brackets = cohort ? getCohortBrackets(cohortId) : [];
@@ -77,10 +80,8 @@ export default function CohortDetailScreen() {
     return users.filter(u => u.name.toLowerCase().includes(playerSearch.toLowerCase()));
   }, [users, playerSearch]);
 
-  // --- FIXED: Smart Calculation ---
-  // This calculates the TRUE limit by accounting for the "No Self-Play" rule.
+  // Smart Calculation for Est. Brackets
   const bracketsToGenerate = useMemo(() => {
-    // 1. Get all active users and their ticket counts
     const activePlayers = selectedUserIds.map(uid => {
       const user = users.find(u => u.id === uid);
       const count = cohort?.userBracketCounts?.[uid] || user?.numBrackets || 1;
@@ -88,34 +89,25 @@ export default function CohortDetailScreen() {
     });
 
     let totalTickets = activePlayers.reduce((sum, p) => sum + p.count, 0);
-    
-    // Start with the naive estimate (Total / 8)
     let maxBrackets = Math.floor(totalTickets / 8);
 
-    // Iteratively lower the number until it fits everyone's constraints
-    // (If I have 20 tickets but maxBrackets is 7, 13 of my tickets are dead weight)
     for (let i = 0; i < 5; i++) {
       if (maxBrackets === 0) break;
-      
       let usableTickets = 0;
       activePlayers.forEach(p => {
-        // A player can only use up to 'maxBrackets' tickets
         usableTickets += Math.min(p.count, maxBrackets);
       });
-
       const newMax = Math.floor(usableTickets / 8);
-      if (newMax === maxBrackets) break; // Found the stable number
+      if (newMax === maxBrackets) break; 
       maxBrackets = newMax;
     }
-
     return maxBrackets;
   }, [selectedUserIds, users, cohort?.userBracketCounts]);
 
-  // Count only the spots that are actually usable (ignoring dead tickets)
   const totalPlayerInstances = selectedUserIds.reduce((sum, uid) => {
     const user = users.find(u => u.id === uid);
     const count = cohort?.userBracketCounts?.[uid] || user?.numBrackets || 1;
-    return sum + Math.min(count, bracketsToGenerate || 999); // Cap at max brackets if calculated
+    return sum + Math.min(count, bracketsToGenerate || 999); 
   }, 0);
   
   const playersNeeded = (bracketsToGenerate + 1) * 8 - totalPlayerInstances;
@@ -152,10 +144,8 @@ export default function CohortDetailScreen() {
     });
   };
 
-  // Set number of brackets directly from text input
   const setBracketCount = (userId, text) => {
     const val = parseInt(text, 10);
-    // Only update if it's a valid positive number
     if (!isNaN(val) && val >= 1) {
       updateCohort(cohortId, {
         userBracketCounts: {
@@ -171,7 +161,6 @@ export default function CohortDetailScreen() {
       Alert.alert('Not Enough Players', `You need 8 spots to form a bracket.`);
       return;
     }
-    
     try {
       await deployCohort(cohortId, selectedUsers, cohort.userBracketCounts);
       Alert.alert('Success', 'Tournament brackets generated!');
@@ -183,9 +172,9 @@ export default function CohortDetailScreen() {
 
   const getStatusColor = (status) => {
     switch (status) {
-      case CohortStatus.ACTIVE: return Colors.success; // Green
-      case CohortStatus.COMPLETE: return Colors.info;  // Blue
-      default: return Colors.warning;                  // Orange
+      case CohortStatus.ACTIVE: return Colors.success; 
+      case CohortStatus.COMPLETE: return Colors.info;
+      default: return Colors.warning;
     }
   };
 
@@ -237,7 +226,6 @@ export default function CohortDetailScreen() {
                   <Text style={styles.summaryStats}>Avg: {user.average} • Hdcp: {user.handicap}</Text>
                 </View>
                 
-                {/* STATUS BADGE */}
                 {isLive ? (
                   <View style={styles.entryBadge}>
                      <Text style={styles.entryCount}>{entryCount}</Text>
@@ -257,68 +245,104 @@ export default function CohortDetailScreen() {
     </View>
   );
 
-  const renderBracketsTab = () => (
-    <View style={styles.tabContent}>
-      {brackets.length === 0 ? (
-        <View style={styles.emptyState}>
-          <Text style={styles.emptyIcon}>📋</Text>
-          <Text style={styles.emptyTitle}>Tournament Setup</Text>
-          <Text style={styles.emptyText}>No brackets generated yet.</Text>
-          <TouchableOpacity style={styles.emptyActionBtn} onPress={() => handleTabChange('roster')}>
-            <Text style={styles.emptyActionBtnText}>Go to Roster</Text>
-          </TouchableOpacity>
-        </View>
-      ) : (
-        brackets.map((bracket) => {
-          // Determine completion status:
-          const isComplete = bracket.structure.completed || bracket.structure.winner;
-          
-          return (
-            <TouchableOpacity
-              key={bracket.id}
-              style={styles.bracketCard}
-              onPress={() => router.push({
-                pathname: '/bracket-edit',
-                params: { bracketId: bracket.id, cohortId: cohort.id },
-              })}
+  const renderBracketsTab = () => {
+    // FILTER LOGIC
+    const visibleBrackets = brackets.filter(b => {
+      if (showCompleted) return true;
+      const isComplete = b.structure.completed || b.structure.winner;
+      return !isComplete;
+    });
+
+    return (
+      <View style={styles.tabContent}>
+        
+        {/* NEW CHECKMARK FILTER */}
+        {brackets.length > 0 && (
+          <View style={styles.filterRow}>
+            <TouchableOpacity 
+              style={styles.checkbox} 
+              onPress={() => setShowCompleted(!showCompleted)}
             >
-              <View style={styles.bracketHeader}>
-                <View style={styles.bracketTitleRow}>
-                  <Text style={styles.bracketIcon}>🏆</Text>
-                  <Text style={styles.bracketTitle}>Bracket {bracket.bracketNumber}</Text>
-                </View>
-                <View style={[
-                  styles.statusPill, 
-                  isComplete ? styles.statusComplete : styles.statusActive
-                ]}>
-                  <Text style={styles.statusPillText}>
-                    {isComplete ? 'COMPLETE' : 'LIVE'}
-                  </Text>
-                </View>
-              </View>
-              <View style={styles.bracketBody}>
-                <Text style={styles.bracketDetails}>{bracket.players.length} Players Competing</Text>
-                {bracket.structure.winner ? (
-                  <View style={styles.winnerRow}>
-                    <Text style={styles.winnerLabel}>Winner:</Text>
-                    <Text style={styles.winnerText}>{bracket.structure.winner.name}</Text>
-                  </View>
-                ) : (
-                  <View style={styles.progressRow}>
-                    <View style={styles.progressBar}>
-                      <View style={[styles.progressFill, { width: '40%' }]} />
-                    </View>
-                    <Text style={styles.progressText}>In Progress</Text>
-                  </View>
-                )}
-              </View>
+              {showCompleted && <Text style={styles.checkmark}>✓</Text>}
             </TouchableOpacity>
-          );
-        })
-      )}
-      <View style={{height: 40}} />
-    </View>
-  );
+            <TouchableOpacity onPress={() => setShowCompleted(!showCompleted)}>
+               <Text style={styles.checkboxLabel}>Show Completed Brackets</Text>
+            </TouchableOpacity>
+          </View>
+        )}
+
+        {visibleBrackets.length === 0 ? (
+          <View style={styles.emptyState}>
+            {brackets.length > 0 ? (
+               // Case: Brackets exist but are hidden
+               <>
+                 <Text style={styles.emptyIcon}>🏁</Text>
+                 <Text style={styles.emptyTitle}>All Active Brackets Complete</Text>
+                 <Text style={styles.emptyText}>Check the box above to view completed history.</Text>
+               </>
+            ) : (
+               // Case: No brackets at all
+               <>
+                 <Text style={styles.emptyIcon}>📋</Text>
+                 <Text style={styles.emptyTitle}>Tournament Setup</Text>
+                 <Text style={styles.emptyText}>No brackets generated yet.</Text>
+                 <TouchableOpacity style={styles.emptyActionBtn} onPress={() => handleTabChange('roster')}>
+                   <Text style={styles.emptyActionBtnText}>Go to Roster</Text>
+                 </TouchableOpacity>
+               </>
+            )}
+          </View>
+        ) : (
+          visibleBrackets.map((bracket) => {
+            const isComplete = bracket.structure.completed || bracket.structure.winner;
+            
+            return (
+              <TouchableOpacity
+                key={bracket.id}
+                style={styles.bracketCard}
+                onPress={() => router.push({
+                  pathname: '/bracket-edit',
+                  params: { bracketId: bracket.id, cohortId: cohort.id },
+                })}
+              >
+                <View style={styles.bracketHeader}>
+                  <View style={styles.bracketTitleRow}>
+                    <Text style={styles.bracketIcon}>🏆</Text>
+                    <Text style={styles.bracketTitle}>Bracket {bracket.bracketNumber}</Text>
+                  </View>
+                  <View style={[
+                    styles.statusPill, 
+                    isComplete ? styles.statusComplete : styles.statusActive
+                  ]}>
+                    <Text style={styles.statusPillText}>
+                      {isComplete ? 'COMPLETE' : 'LIVE'}
+                    </Text>
+                  </View>
+                </View>
+                <View style={styles.bracketBody}>
+                  <Text style={styles.bracketDetails}>{bracket.players.length} Players Competing</Text>
+                  {bracket.structure.winner ? (
+                    <View style={styles.winnerRow}>
+                      <Text style={styles.winnerLabel}>Winner:</Text>
+                      <Text style={styles.winnerText}>{bracket.structure.winner.name}</Text>
+                    </View>
+                  ) : (
+                    <View style={styles.progressRow}>
+                      <View style={styles.progressBar}>
+                        <View style={[styles.progressFill, { width: '40%' }]} />
+                      </View>
+                      <Text style={styles.progressText}>In Progress</Text>
+                    </View>
+                  )}
+                </View>
+              </TouchableOpacity>
+            );
+          })
+        )}
+        <View style={{height: 40}} />
+      </View>
+    );
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -360,7 +384,6 @@ export default function CohortDetailScreen() {
         <View style={styles.footerContainer}>
           <View style={styles.footerInfo}>
              <Text style={styles.footerStats}><Text style={{fontWeight: 'bold', color: Colors.white}}>{totalPlayerInstances}</Text> Spots Filled</Text>
-             {/* Note: playersNeeded is rough estimate based on next bracket */}
              <Text style={styles.footerSub}>Add {playersNeeded} more for next bracket</Text>
           </View>
           <TouchableOpacity style={[styles.deployBtn, !isDeployable && styles.deployBtnDisabled]} onPress={handleDeploy} disabled={!isDeployable}>
@@ -384,7 +407,6 @@ export default function CohortDetailScreen() {
           <ScrollView style={styles.modalContent}>
              {allUsersFiltered.map(user => {
                const isSelected = selectedUserIds.includes(user.id);
-               // Get current bracket count for this user
                const count = cohort?.userBracketCounts?.[user.id] || user.numBrackets || 1;
                
                return (
@@ -402,7 +424,6 @@ export default function CohortDetailScreen() {
                      </View>
                    </TouchableOpacity>
 
-                   {/* TEXT INPUT CONTROLS (Only visible if selected) */}
                    {isSelected && (
                      <View style={styles.inputWrapper}>
                        <Text style={styles.inputLabel}>Brackets:</Text>
@@ -430,7 +451,7 @@ export default function CohortDetailScreen() {
 
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
-  // ... (HUD and Tabs styles same as before)
+  // ... (Previous Styles)
   hudContainer: { flexDirection: 'row', backgroundColor: Colors.surface, paddingVertical: 12, borderBottomWidth: 1, borderBottomColor: Colors.border, justifyContent: 'space-evenly', alignItems: 'center' },
   hudItem: { alignItems: 'center', flex: 1 },
   hudLabel: { fontSize: 10, color: Colors.textSecondary, textTransform: 'uppercase', letterSpacing: 1, marginBottom: 4 },
@@ -444,6 +465,19 @@ const styles = StyleSheet.create({
   contentContainer: { flex: 1 },
   tabContent: { paddingHorizontal: 16 },
   
+  // New Filter Row Styles
+  filterRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    marginTop: 4,
+    paddingHorizontal: 4,
+  },
+  checkbox: { width: 20, height: 20, borderRadius: 4, borderWidth: 2, borderColor: Colors.textSecondary, marginRight: 8, alignItems: 'center', justifyContent: 'center' },
+  checkboxSelected: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  checkmark: { color: Colors.primary, fontWeight: 'bold', fontSize: 14, marginTop: -2 },
+  checkboxLabel: { color: Colors.textSecondary, fontSize: 14, fontWeight: '600' },
+
   rosterHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16, paddingHorizontal: 4 },
   rosterCount: { color: Colors.textSecondary, fontWeight: '600', fontSize: 14 },
   editLink: { color: Colors.primary, fontWeight: 'bold', fontSize: 14 },
@@ -472,20 +506,15 @@ const styles = StyleSheet.create({
   searchBarContainer: { padding: 16, backgroundColor: Colors.surface, borderBottomWidth: 1, borderBottomColor: Colors.border },
   searchInput: { backgroundColor: Colors.background, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, padding: 12, color: Colors.white, fontSize: 14 },
   
-  // Updated Player Row in Modal
   playerRow: { flexDirection: 'row', backgroundColor: Colors.surface, marginBottom: 10, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, alignItems: 'center', paddingRight: 12 },
   playerRowSelected: { borderColor: Colors.primary, backgroundColor: Colors.surfaceSecondary },
   playerMainTouch: { flex: 1, flexDirection: 'row', alignItems: 'center', padding: 12 },
   
-  checkbox: { width: 24, height: 24, borderRadius: 12, borderWidth: 2, borderColor: Colors.textLight, marginRight: 12, alignItems: 'center', justifyContent: 'center' },
-  checkboxSelected: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  checkmark: { color: Colors.white, fontSize: 12, fontWeight: 'bold' },
   playerInfo: { flex: 1 },
   playerName: { color: Colors.textPrimary, fontSize: 16, fontWeight: '600' },
   playerNameSelected: { color: Colors.primary },
   playerStats: { color: Colors.textSecondary, fontSize: 12 },
   
-  // Input Styles
   inputWrapper: { alignItems: 'center', justifyContent: 'center', marginLeft: 8 },
   inputLabel: { fontSize: 8, color: Colors.textSecondary, textTransform: 'uppercase', marginBottom: 2 },
   bracketInput: {
@@ -501,7 +530,6 @@ const styles = StyleSheet.create({
     fontSize: 16,
   },
   
-  // ... (Empty State & Footer)
   emptyState: { alignItems: 'center', marginTop: 60 },
   emptyIcon: { fontSize: 48, marginBottom: 16 },
   emptyTitle: { fontSize: 18, fontWeight: 'bold', color: Colors.white, marginBottom: 8 },

@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, StatusBar } from 'react-native';
+import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, StatusBar, ScrollView } from 'react-native';
 import { useRouter } from 'expo-router';
 import { Colors } from '../styles/colors';
 import NavigationHeader from '../components/NavigationHeader';
@@ -11,7 +11,8 @@ export default function HomeScreen() {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={Colors.headerDark} />
       <NavigationHeader title="🏆 Bracket Builder" showBack={false} />
-      <View style={styles.content}>
+      
+      <ScrollView contentContainerStyle={styles.content}>
         <Text style={styles.subtitle}>Bowling Tournament Management</Text>
         
         <View style={styles.buttonContainer}>
@@ -36,6 +37,7 @@ export default function HomeScreen() {
             <Text style={styles.buttonText}>Enter Scores</Text>
           </TouchableOpacity>
           
+          {/* REVERTED: PAYOUTS BUTTON RESTORED */}
           <TouchableOpacity
             style={styles.button}
             onPress={() => router.push('/payout')}
@@ -50,7 +52,7 @@ export default function HomeScreen() {
             <Text style={styles.buttonText}>Admin</Text>
           </TouchableOpacity>
         </View>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -61,16 +63,10 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.headerDark,
   },
   content: {
-    flex: 1,
+    flexGrow: 1,
     justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
-  },
-  title: {
-    fontSize: 32,
-    fontWeight: 'bold',
-    color: Colors.white,
-    marginBottom: 8,
   },
   subtitle: {
     fontSize: 16,

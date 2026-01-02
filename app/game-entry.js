@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useMemo, useRef } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -9,71 +9,13 @@ import {
   SafeAreaView,
   Alert,
   Modal,
-  Animated,
-  Easing,
-  Dimensions
+  ActivityIndicator
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { useApp } from '../context/AppContext';
 import { Colors } from '../styles/colors';
 import { calculateTotalScore, advanceWinner, isPlayerLiveInCohort, isScoreRelevant } from '../utils/bracketLogic';
 import NavigationHeader from '../components/NavigationHeader';
-
-const { width } = Dimensions.get('window');
-
-// --- Celebration Modal Component ---
-const CelebrationModal = ({ visible, winnerName, bracketNumber, onClose }) => {
-  const scaleValue = useRef(new Animated.Value(0)).current;
-  const opacityValue = useRef(new Animated.Value(0)).current;
-
-  useEffect(() => {
-    if (visible) {
-      Animated.parallel([
-        Animated.spring(scaleValue, {
-          toValue: 1,
-          friction: 5,
-          tension: 40,
-          useNativeDriver: true,
-        }),
-        Animated.timing(opacityValue, {
-          toValue: 1,
-          duration: 300,
-          useNativeDriver: true,
-        })
-      ]).start();
-    } else {
-      scaleValue.setValue(0);
-      opacityValue.setValue(0);
-    }
-  }, [visible]);
-
-  if (!visible) return null;
-
-  return (
-    <Modal visible={visible} transparent={true} animationType="none">
-      <View style={styles.celebrationOverlay}>
-        <Animated.View 
-          style={[
-            styles.celebrationCard, 
-            { transform: [{ scale: scaleValue }], opacity: opacityValue }
-          ]}
-        >
-          <Text style={styles.celebrationEmoji}>🏆</Text>
-          <Text style={styles.celebrationTitle}>WINNER!</Text>
-          <Text style={styles.celebrationText}>
-            <Text style={styles.winnerHighlight}>{winnerName}</Text>
-          </Text>
-          <Text style={styles.celebrationSub}>
-            Champion of Bracket #{bracketNumber}
-          </Text>
-          <TouchableOpacity style={styles.celebrationBtn} onPress={onClose}>
-            <Text style={styles.celebrationBtnText}>Awesome!</Text>
-          </TouchableOpacity>
-        </Animated.View>
-      </View>
-    </Modal>
-  );
-};
 
 export default function GameEntryScreen() {
   const { cohortId: paramCohortId } = useLocalSearchParams();
@@ -83,9 +25,7 @@ export default function GameEntryScreen() {
   const [tempScore, setTempScore] = useState('');
   const [showCompleted, setShowCompleted] = useState(false);
   const [dropdownVisible, setDropdownVisible] = useState(false);
-  
-  // Celebration State
-  const [celebrationData, setCelebrationData] = useState(null);
+  const [isSyncing, setIsSyncing] = useState(false);
 
   useEffect(() => {
     if (paramCohortId && paramCohortId !== selectedCohortId) {
@@ -144,6 +84,7 @@ export default function GameEntryScreen() {
 
     if (scoreValue !== null && !isNaN(scoreValue)) {
       try {
+        // 1. Save to DB
         await saveGame({
           cohortId: selectedCohortId,
           playerId: playerId,
@@ -151,8 +92,10 @@ export default function GameEntryScreen() {
           score: scoreValue,
         });
 
-        await new Promise(resolve => setTimeout(resolve, 50));
-        await updateBracketsForPlayer(playerId, gameNumber);
+        // 2. IMMEDIATE UPDATE: Pass the new score specifically
+        // This triggers the bracket update > which triggers the Payout creation in AppContext
+        await updateBracketsForPlayer(playerId, gameNumber, scoreValue);
+        
       } catch (error) {
         console.error("Error saving game/updating bracket:", error);
         Alert.alert("Error", "Failed to update scores. Please try again.");
@@ -163,95 +106,114 @@ export default function GameEntryScreen() {
     setTempScore('');
   };
 
-  const updateBracketsForPlayer = async (playerId, gameNumber) => {
+  // --- MANUAL SYNC BUTTON FUNCTION ---
+  const handleForceSync = async () => {
     if (!selectedCohortId) return;
-    
-    const cohort = cohorts.find(c => c.id === selectedCohortId);
-    if (!cohort) return;
+    setIsSyncing(true);
+    try {
+      const currentCohortBrackets = brackets.filter(b => b.cohortId === selectedCohortId);
+      let updatesCount = 0;
 
-    const currentCohortBrackets = brackets.filter(b => b.cohortId === selectedCohortId);
-    
-    for (const bracket of currentCohortBrackets) {
-      // Don't process already completed brackets unless we are correcting scores
-      // but logic handles 'completed' flag inside matches anyway.
+      for (const bracket of currentCohortBrackets) {
+         if (bracket.structure.completed) continue;
+         
+         const updated = await processSingleBracket(bracket, null); 
+         if (updated) updatesCount++;
+      }
       
-      let bracketUpdated = true;
-      let iterations = 0;
-      
-      while (bracketUpdated && iterations < 5) {
-        iterations++;
-        bracketUpdated = false;
-        
-        // Fetch fresh bracket state
-        const currentBracket = brackets.find(b => b.id === bracket.id);
-        if (!currentBracket) break;
-        
-        // If already completed, skip processing to avoid re-triggering win
-        if (currentBracket.structure.completed) continue;
-        
-        const updatedStructure = JSON.parse(JSON.stringify(currentBracket.structure));
-        let justCompleted = false;
-        let winnerName = "";
+      Alert.alert("Sync Complete", `Checked all brackets. Updated ${updatesCount} bracket(s).`);
+    } catch (err) {
+      console.error(err);
+      Alert.alert("Error", "Failed to sync brackets.");
+    } finally {
+      setIsSyncing(false);
+    }
+  };
 
-        for (let roundIndex = 0; roundIndex < updatedStructure.rounds.length; roundIndex++) {
-          const round = updatedStructure.rounds[roundIndex];
-          if (!round) continue;
-          
-          const requiredGameNumber = roundIndex + 1;
+  // Helper: Process a single bracket to see if we can advance anyone
+  const processSingleBracket = async (bracket, manualScoreOverride) => {
+    const cohort = cohorts.find(c => c.id === bracket.cohortId);
+    if (!cohort) return false;
 
-          for (let matchIndex = 0; matchIndex < round.length; matchIndex++) {
-            const match = round[matchIndex];
-            if (!match || match.completed || !match.player1 || !match.player2) continue;
+    const freshBracket = brackets.find(b => b.id === bracket.id) || bracket;
+    const updatedStructure = JSON.parse(JSON.stringify(freshBracket.structure));
+    let structureChanged = false;
 
-            // Fetch scores
-            const player1Games = games.filter(g => g.cohortId === selectedCohortId && g.playerId === match.player1.id);
-            const player2Games = games.filter(g => g.cohortId === selectedCohortId && g.playerId === match.player2.id);
-            
-            const player1Game = player1Games.find(g => g.gameNumber === requiredGameNumber);
-            const player2Game = player2Games.find(g => g.gameNumber === requiredGameNumber);
-            
-            const p1Score = player1Game?.score;
-            const p2Score = player2Game?.score;
+    // Loop through rounds (checking up to 5 times for cascading wins)
+    for (let loop = 0; loop < 5; loop++) {
+      let loopChanged = false;
 
-            if (p1Score != null && p2Score != null) {
-              match.player1.score = p1Score;
-              match.player2.score = p2Score;
-              
-              const p1Total = calculateTotalScore(p1Score, match.player1.handicap, cohort.type === 'Handicap');
-              const p2Total = calculateTotalScore(p2Score, match.player2.handicap, cohort.type === 'Handicap');
+      for (let roundIndex = 0; roundIndex < updatedStructure.rounds.length; roundIndex++) {
+        const round = updatedStructure.rounds[roundIndex];
+        const requiredGameNumber = roundIndex + 1;
 
-              const winner = p1Total > p2Total ? match.player1 : (p2Total > p1Total ? match.player2 : match.player1);
+        for (let matchIndex = 0; matchIndex < round.length; matchIndex++) {
+          const match = round[matchIndex];
+          if (!match || match.completed || !match.player1 || !match.player2) continue;
 
-              const advancedResult = advanceWinner(
-                { structure: updatedStructure },
-                roundIndex,
-                matchIndex,
-                winner
-              );
-              
-              Object.assign(updatedStructure, advancedResult.structure);
-              bracketUpdated = true;
-              
-              // Check if this move completed the tournament
-              if (updatedStructure.completed && updatedStructure.winner) {
-                justCompleted = true;
-                winnerName = updatedStructure.winner.name;
-              }
-              
-              await updateBracket(bracket.id, { structure: updatedStructure });
-              
-              if (justCompleted) {
-                 setCelebrationData({
-                   winnerName: winnerName,
-                   bracketNumber: bracket.bracketNumber
-                 });
-              }
-              break; 
-            }
+          // --- SCORE LOOKUP ---
+          let p1Score = null;
+          let p2Score = null;
+
+          if (manualScoreOverride && manualScoreOverride.gameNumber === requiredGameNumber) {
+            if (manualScoreOverride.playerId === match.player1.id) p1Score = manualScoreOverride.score;
+            if (manualScoreOverride.playerId === match.player2.id) p2Score = manualScoreOverride.score;
           }
-          if (bracketUpdated) break;
+
+          if (p1Score === null) {
+            const g = games.find(g => g.cohortId === bracket.cohortId && g.playerId === match.player1.id && g.gameNumber === requiredGameNumber);
+            if (g) p1Score = g.score;
+          }
+          if (p2Score === null) {
+            const g = games.find(g => g.cohortId === bracket.cohortId && g.playerId === match.player2.id && g.gameNumber === requiredGameNumber);
+            if (g) p2Score = g.score;
+          }
+
+          // --- EVALUATE ---
+          if (p1Score != null && p2Score != null) {
+            match.player1.score = p1Score;
+            match.player2.score = p2Score;
+            
+            const p1Total = calculateTotalScore(p1Score, match.player1.handicap, cohort.type === 'Handicap');
+            const p2Total = calculateTotalScore(p2Score, match.player2.handicap, cohort.type === 'Handicap');
+
+            const winner = p1Total > p2Total ? match.player1 : (p2Total > p1Total ? match.player2 : match.player1);
+
+            const advancedResult = advanceWinner(
+              { structure: updatedStructure },
+              roundIndex,
+              matchIndex,
+              winner
+            );
+            
+            Object.assign(updatedStructure, advancedResult.structure);
+            structureChanged = true;
+            loopChanged = true;
+          }
         }
       }
+      if (!loopChanged) break; 
+    }
+
+    if (structureChanged) {
+      // This update triggers the context to check for completion and generate payouts
+      await updateBracket(bracket.id, { structure: updatedStructure });
+      return true;
+    }
+    return false;
+  };
+
+  const updateBracketsForPlayer = async (playerId, gameNumber, newScore) => {
+    if (!selectedCohortId) return;
+    
+    const currentCohortBrackets = brackets.filter(b => b.cohortId === selectedCohortId);
+    const relevantBrackets = currentCohortBrackets.filter(b => 
+      b.players.some(p => p.id === playerId)
+    );
+
+    for (const bracket of relevantBrackets) {
+      if (bracket.structure.completed) continue;
+      await processSingleBracket(bracket, { playerId, gameNumber, score: newScore });
     }
   };
 
@@ -266,21 +228,13 @@ export default function GameEntryScreen() {
     <SafeAreaView style={styles.container}>
       <NavigationHeader title="Enter Game Scores" />
 
-      {/* Celebration Modal */}
-      <CelebrationModal 
-        visible={!!celebrationData} 
-        winnerName={celebrationData?.winnerName}
-        bracketNumber={celebrationData?.bracketNumber}
-        onClose={() => setCelebrationData(null)}
-      />
-
       <ScrollView style={styles.scrollView}>
         <View style={styles.form}>
           <View style={styles.cohortSelectionContainer}>
             <View style={styles.instructionsColumn}>
               <Text style={styles.instructionsTitle}>Select Cohort</Text>
               <Text style={styles.instructionsText}>
-                Choose a cohort to enter scores. Use the toggle to view completed brackets.
+                Choose a cohort to enter scores.
               </Text>
             </View>
             <View style={styles.selectionsColumn}>
@@ -288,18 +242,23 @@ export default function GameEntryScreen() {
                 <Text style={styles.dropdownButtonText}>{selectedCohort ? `${selectedCohort.name} (${selectedCohort.type})` : 'Select a cohort...'}</Text>
                 <Text style={styles.dropdownArrow}>▼</Text>
               </TouchableOpacity>
-              <View style={styles.checkboxContainer}>
-                <TouchableOpacity style={styles.checkbox} onPress={() => setShowCompleted(!showCompleted)}>
-                  {showCompleted && <Text style={styles.checkmark}>✓</Text>}
+              
+              {selectedCohortId && (
+                <TouchableOpacity 
+                  style={[styles.syncButton, isSyncing && styles.syncButtonDisabled]} 
+                  onPress={handleForceSync}
+                  disabled={isSyncing}
+                >
+                  {isSyncing ? (
+                    <ActivityIndicator color={Colors.white} size="small" />
+                  ) : (
+                    <Text style={styles.syncButtonText}>🔄 Update Brackets</Text>
+                  )}
                 </TouchableOpacity>
-                <TouchableOpacity onPress={() => setShowCompleted(!showCompleted)} style={styles.checkboxLabelContainer}>
-                  <Text style={styles.checkboxLabel}>Show Completed</Text>
-                </TouchableOpacity>
-              </View>
+              )}
             </View>
           </View>
 
-          {/* Modal Dropdown Logic... (Same as before) */}
           <Modal visible={dropdownVisible} transparent={true} animationType="fade" onRequestClose={() => setDropdownVisible(false)}>
              <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setDropdownVisible(false)}>
                <View style={styles.dropdownModal} onStartShouldSetResponder={() => true}>
@@ -336,7 +295,6 @@ export default function GameEntryScreen() {
                 activeUsers.map((user) => {
                   const isLive = isPlayerLiveInCohort(user.id, activeBrackets);
                   
-                  // Relevance checks
                   const isGame1Relevant = isScoreRelevant(user.id, 1, activeBrackets);
                   const isGame2Relevant = isScoreRelevant(user.id, 2, activeBrackets);
                   const isGame3Relevant = isScoreRelevant(user.id, 3, activeBrackets);
@@ -401,7 +359,6 @@ export default function GameEntryScreen() {
 }
 
 const styles = StyleSheet.create({
-  // ... (previous styles)
   container: { flex: 1, backgroundColor: Colors.background },
   scrollView: { flex: 1 },
   form: { padding: 16 },
@@ -413,11 +370,11 @@ const styles = StyleSheet.create({
   dropdownButton: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 14, borderRadius: 8, borderWidth: 2, borderColor: Colors.white, backgroundColor: Colors.white },
   dropdownButtonText: { fontSize: 16, color: Colors.textPrimary, fontWeight: '600', flex: 1 },
   dropdownArrow: { fontSize: 12, color: Colors.textSecondary, marginLeft: 8 },
-  checkboxContainer: { flexDirection: 'row', alignItems: 'center', gap: 12 },
-  checkbox: { width: 24, height: 24, borderRadius: 4, borderWidth: 2, borderColor: Colors.white, justifyContent: 'center', alignItems: 'center' },
-  checkmark: { fontSize: 16, color: Colors.primary, fontWeight: 'bold' },
-  checkboxLabelContainer: { flex: 1 },
-  checkboxLabel: { fontSize: 14, color: Colors.white, fontWeight: '600' },
+  
+  syncButton: { backgroundColor: 'rgba(255,255,255,0.2)', paddingVertical: 10, paddingHorizontal: 16, borderRadius: 8, borderWidth: 1, borderColor: Colors.white, alignItems: 'center' },
+  syncButtonDisabled: { opacity: 0.6 },
+  syncButtonText: { color: Colors.white, fontWeight: 'bold', fontSize: 14 },
+  
   modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
   dropdownModal: { backgroundColor: Colors.surface, borderRadius: 12, width: '90%', maxHeight: '70%' },
   dropdownHeader: { flexDirection: 'row', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderBottomColor: Colors.border },
@@ -446,65 +403,4 @@ const styles = StyleSheet.create({
   disabledText: { color: Colors.textSecondary, fontWeight: 'bold' },
   emptyState: { padding: 40, alignItems: 'center' },
   emptyText: { color: Colors.textSecondary },
-
-  // Celebration Modal Styles
-  celebrationOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0,0,0,0.8)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  celebrationCard: {
-    backgroundColor: Colors.surface,
-    padding: 30,
-    borderRadius: 20,
-    alignItems: 'center',
-    width: width * 0.8,
-    borderWidth: 2,
-    borderColor: Colors.accent,
-    shadowColor: Colors.accent,
-    shadowOffset: { width: 0, height: 0 },
-    shadowOpacity: 0.6,
-    shadowRadius: 20,
-    elevation: 10,
-  },
-  celebrationEmoji: {
-    fontSize: 60,
-    marginBottom: 10,
-  },
-  celebrationTitle: {
-    fontSize: 24,
-    fontWeight: 'bold',
-    color: Colors.white,
-    marginBottom: 10,
-    textTransform: 'uppercase',
-  },
-  celebrationText: {
-    fontSize: 16,
-    color: Colors.textSecondary,
-    marginBottom: 4,
-    textAlign: 'center',
-  },
-  winnerHighlight: {
-    color: Colors.success,
-    fontWeight: 'bold',
-    fontSize: 20,
-  },
-  celebrationSub: {
-    fontSize: 12,
-    color: Colors.textLight,
-    marginBottom: 24,
-    marginTop: 8,
-  },
-  celebrationBtn: {
-    backgroundColor: Colors.primary,
-    paddingHorizontal: 30,
-    paddingVertical: 12,
-    borderRadius: 25,
-  },
-  celebrationBtnText: {
-    color: Colors.white,
-    fontWeight: 'bold',
-    fontSize: 16,
-  },
 });

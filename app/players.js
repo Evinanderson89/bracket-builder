@@ -404,6 +404,9 @@ export default function PlayersScreen() {
               ) : (
                 sortedUsers.map((user) => {
                   const totalPayout = getUserTotalPayout(user.name);
+                  // Calculate total brackets for this user
+                  const bracketCount = brackets.filter(b => b.players.some(p => p.id === user.id)).length;
+                  
                   return (
                     <TouchableOpacity
                       key={user.id}
@@ -417,7 +420,7 @@ export default function PlayersScreen() {
                         styles.nameText,
                         selectedUserId === user.id && styles.nameTextSelected,
                       ]}>
-                        {user.name}
+                        {user.name} <Text style={{ fontSize: 12, opacity: 0.7 }}>({bracketCount} games)</Text>
                       </Text>
                       <Text style={[
                         styles.nameInfo,
@@ -971,4 +974,3 @@ const styles = StyleSheet.create({
     fontWeight: '600',
   },
 });
-
