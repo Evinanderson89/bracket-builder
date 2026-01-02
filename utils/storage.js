@@ -7,6 +7,8 @@ const STORAGE_KEYS = {
   GAMES: 'bracket_games',
   PAYOUTS: 'bracket_payouts',
   DELETE_PASSWORD: 'bracket_delete_password',
+  AUTH_USER: 'bracket_auth_user',
+  USER_MODE: 'bracket_user_mode', // 'admin' or 'user'
 };
 
 // User operations
@@ -120,6 +122,51 @@ export const saveDeletePassword = async (password) => {
     await AsyncStorage.setItem(STORAGE_KEYS.DELETE_PASSWORD, password);
   } catch (error) {
     console.error('Error saving delete password:', error);
+  }
+};
+
+// Auth operations
+export const saveAuthUser = async (user) => {
+  try {
+    await AsyncStorage.setItem(STORAGE_KEYS.AUTH_USER, JSON.stringify(user));
+  } catch (error) {
+    console.error('Error saving auth user:', error);
+  }
+};
+
+export const getAuthUser = async () => {
+  try {
+    const data = await AsyncStorage.getItem(STORAGE_KEYS.AUTH_USER);
+    return data ? JSON.parse(data) : null;
+  } catch (error) {
+    console.error('Error getting auth user:', error);
+    return null;
+  }
+};
+
+export const clearAuthUser = async () => {
+  try {
+    await AsyncStorage.removeItem(STORAGE_KEYS.AUTH_USER);
+  } catch (error) {
+    console.error('Error clearing auth user:', error);
+  }
+};
+
+export const saveUserMode = async (mode) => {
+  try {
+    await AsyncStorage.setItem(STORAGE_KEYS.USER_MODE, mode);
+  } catch (error) {
+    console.error('Error saving user mode:', error);
+  }
+};
+
+export const getUserMode = async () => {
+  try {
+    const mode = await AsyncStorage.getItem(STORAGE_KEYS.USER_MODE);
+    return mode || 'admin';
+  } catch (error) {
+    console.error('Error getting user mode:', error);
+    return 'admin';
   }
 };
 

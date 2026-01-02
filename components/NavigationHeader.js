@@ -5,6 +5,12 @@ import { Colors } from '../styles/colors';
 
 // Route mapping for fallback navigation
 const routeMap = {
+  '/login': '/',
+  '/user-dashboard': '/login',
+  '/user-profile': '/user-dashboard',
+  '/user-brackets': '/user-dashboard',
+  '/user-stats': '/user-dashboard',
+  '/user-entry': '/user-dashboard',
   '/cohorts': '/',
   '/cohort-detail': '/cohorts',
   '/bracket-edit': '/cohorts',

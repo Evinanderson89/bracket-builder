@@ -1,11 +1,38 @@
-import React from 'react';
-import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, StatusBar, ScrollView } from 'react-native';
+import React, { useEffect } from 'react';
+import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, StatusBar, ScrollView, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useAuth } from '../context/AuthContext';
 import { Colors } from '../styles/colors';
 import NavigationHeader from '../components/NavigationHeader';
 
 export default function HomeScreen() {
   const router = useRouter();
+  const { user, mode, loading, switchToUser } = useAuth();
+
+  useEffect(() => {
+    if (!loading) {
+      if (mode === 'user' && user) {
+        router.replace('/user-dashboard');
+      } else if (mode === 'user' && !user) {
+        router.replace('/login');
+      }
+    }
+  }, [loading, mode, user, router]);
+
+  if (loading) {
+    return (
+      <SafeAreaView style={styles.container}>
+        <View style={styles.loadingContainer}>
+          <ActivityIndicator size="large" color={Colors.primary} />
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // If in user mode, this screen shouldn't be shown (redirected in useEffect)
+  if (mode === 'user') {
+    return null;
+  }
 
   return (
     <SafeAreaView style={styles.container}>
@@ -51,6 +78,18 @@ export default function HomeScreen() {
           >
             <Text style={styles.buttonText}>Admin</Text>
           </TouchableOpacity>
+
+          {user && (
+            <TouchableOpacity
+              style={[styles.button, styles.switchButton]}
+              onPress={async () => {
+                await switchToUser();
+                router.replace('/user-dashboard');
+              }}
+            >
+              <Text style={styles.buttonText}>👤 Switch to Player View</Text>
+            </TouchableOpacity>
+          )}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -92,5 +131,15 @@ const styles = StyleSheet.create({
     color: Colors.white,
     fontSize: 16,
     fontWeight: '600',
+  },
+  loadingContainer: {
+    flex: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    backgroundColor: Colors.headerDark,
+  },
+  switchButton: {
+    backgroundColor: Colors.success,
+    marginTop: 12,
   },
 });
