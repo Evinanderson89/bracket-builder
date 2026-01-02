@@ -255,77 +255,93 @@ export const AppProvider = ({ children }) => {
 
   // Bracket operations
   const updateBracket = async (bracketId, updates) => {
+    // 1. Calculate the new state for brackets
     const updatedBrackets = brackets.map(b => b.id === bracketId ? { ...b, ...updates } : b);
+    
+    // 2. Update state and storage
     setBrackets(updatedBrackets);
     await saveBrackets(updatedBrackets);
 
-    // Check if bracket is complete and create payout
+    // 3. Check for completion using the *fresh* updatedBrackets list
     const bracket = updatedBrackets.find(b => b.id === bracketId);
     if (bracket && bracket.structure.completed && bracket.structure.winner) {
-      await createPayoutsForBracket(bracket);
+      // Pass the fresh list to ensure cohort completion check is accurate
+      await createPayoutsForBracket(bracket, updatedBrackets);
     }
   };
 
-  const createPayoutsForBracket = async (bracket) => {
+  const createPayoutsForBracket = async (bracket, currentBrackets) => {
     const cohort = cohorts.find(c => c.id === bracket.cohortId);
     if (!cohort) return;
 
-    // Find second place (loser of final match)
-    const finalRound = bracket.structure.rounds[bracket.structure.rounds.length - 1];
-    const finalMatch = finalRound[0];
-    const secondPlace = finalMatch.player1?.id === bracket.structure.winner.id
-      ? finalMatch.player2
-      : finalMatch.player1;
+    // Check if payouts already exist for this bracket to avoid duplicates
+    // (e.g. if updateBracket is called multiple times on a completed bracket)
+    const existingPayouts = payouts.some(p => p.bracketId === bracket.id);
+    
+    if (!existingPayouts) {
+      // Find second place (loser of final match)
+      const finalRound = bracket.structure.rounds[bracket.structure.rounds.length - 1];
+      const finalMatch = finalRound[0];
+      const secondPlace = finalMatch.player1?.id === bracket.structure.winner.id
+        ? finalMatch.player2
+        : finalMatch.player1;
 
-    const date = new Date().toISOString().split('T')[0];
+      const date = new Date().toISOString().split('T')[0];
 
-    // Create payouts
-    const newPayouts = [
-      {
-        id: `${bracket.id}_first`,
-        cohortId: bracket.cohortId,
-        cohortName: cohort.name,
-        playerId: bracket.structure.winner.id,
-        playerName: bracket.structure.winner.name,
-        amount: PayoutAmounts.FIRST_PLACE,
-        position: 1,
-        date,
-        bracketId: bracket.id,
-      },
-      {
-        id: `${bracket.id}_second`,
-        cohortId: bracket.cohortId,
-        cohortName: cohort.name,
-        playerId: secondPlace?.id,
-        playerName: secondPlace?.name,
-        amount: PayoutAmounts.SECOND_PLACE,
-        position: 2,
-        date,
-        bracketId: bracket.id,
-      },
-      {
-        id: `${bracket.id}_operator`,
-        cohortId: bracket.cohortId,
-        cohortName: cohort.name,
-        playerId: 'operator',
-        playerName: 'Operator',
-        amount: PayoutAmounts.OPERATOR_CUT,
-        position: 0,
-        date,
-        bracketId: bracket.id,
-        isOperator: true,
-      },
-    ];
+      // Create payouts
+      const newPayouts = [
+        {
+          id: `${bracket.id}_first`,
+          cohortId: bracket.cohortId,
+          cohortName: cohort.name,
+          playerId: bracket.structure.winner.id,
+          playerName: bracket.structure.winner.name,
+          amount: PayoutAmounts.FIRST_PLACE,
+          position: 1,
+          date,
+          bracketId: bracket.id,
+        },
+        {
+          id: `${bracket.id}_second`,
+          cohortId: bracket.cohortId,
+          cohortName: cohort.name,
+          playerId: secondPlace?.id,
+          playerName: secondPlace?.name,
+          amount: PayoutAmounts.SECOND_PLACE,
+          position: 2,
+          date,
+          bracketId: bracket.id,
+        },
+        {
+          id: `${bracket.id}_operator`,
+          cohortId: bracket.cohortId,
+          cohortName: cohort.name,
+          playerId: 'operator',
+          playerName: 'Operator',
+          amount: PayoutAmounts.OPERATOR_CUT,
+          position: 0,
+          date,
+          bracketId: bracket.id,
+          isOperator: true,
+        },
+      ];
 
-    const updatedPayouts = [...payouts, ...newPayouts];
-    setPayouts(updatedPayouts);
-    await savePayouts(updatedPayouts);
+      const updatedPayouts = [...payouts, ...newPayouts];
+      setPayouts(updatedPayouts);
+      await savePayouts(updatedPayouts);
+    }
 
     // Check if all brackets in cohort are complete
-    const cohortBrackets = brackets.filter(b => b.cohortId === bracket.cohortId);
+    // Use the passed `currentBrackets` (fresh) or fallback to `brackets` (stale state)
+    const bracketList = currentBrackets || brackets;
+    const cohortBrackets = bracketList.filter(b => b.cohortId === bracket.cohortId);
     const allComplete = cohortBrackets.every(b => b.structure.completed);
+    
     if (allComplete) {
-      await updateCohort(bracket.cohortId, { status: CohortStatus.COMPLETE });
+      // Only update if not already complete to save a write
+      if (cohort.status !== CohortStatus.COMPLETE) {
+        await updateCohort(bracket.cohortId, { status: CohortStatus.COMPLETE });
+      }
     }
   };
 
@@ -394,4 +410,3 @@ export const AppProvider = ({ children }) => {
 
   return <AppContext.Provider value={value}>{children}</AppContext.Provider>;
 };
-

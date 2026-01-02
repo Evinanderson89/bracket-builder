@@ -44,13 +44,6 @@ export default function BracketEditScreen() {
     return game?.score;
   };
 
-  const getMatchStatus = (match) => {
-    if (!match) return 'tbd';
-    if (match.completed) return 'completed';
-    if (match.player1 && match.player2) return 'ready';
-    return 'waiting';
-  };
-
   // --- Components ---
 
   const MatchCard = ({ match, roundIndex, matchIndex }) => {
@@ -59,13 +52,11 @@ export default function BracketEditScreen() {
     // Helper to render a single player row within the card
     const PlayerRow = ({ player, opponent, isTop }) => {
       const score = player ? getPlayerGameScore(player.id, gameNumber) : null;
-      const opponentScore = opponent ? getPlayerGameScore(opponent.id, gameNumber) : null;
       
       const isWinner = match?.winner?.id === player?.id;
       const isLoser = match?.completed && !isWinner && player;
       
       // Calculate display score (with handicap)
-      let displayScore = score;
       let totalScore = score;
       if (player && score !== null && score !== undefined && cohort.type === 'Handicap') {
          totalScore = score + (player.handicap || 0);
@@ -128,28 +119,17 @@ export default function BracketEditScreen() {
     );
   };
 
-  const Connector = ({ isTop, height }) => {
-    // Draws the bracket lines connecting rounds
-    // height is the vertical distance between the two source matches
-    if (isTop) {
-      return (
-        <View style={[styles.connectorContainer, { height: height / 2, bottom: -1 }]}>
-          <View style={styles.connectorRightBottom} />
-        </View>
-      );
-    }
-    return (
-      <View style={[styles.connectorContainer, { height: height / 2, top: -1 }]}>
-        <View style={styles.connectorRightTop} />
-      </View>
-    );
-  };
-
   const renderBracketTree = () => {
     const rounds = bracket.structure.rounds;
     
-    // We render columns: [Round 1] [Connectors] [Round 2] [Connectors] [Round 3] ...
-    
+    // Logic to detect champion:
+    // Either the bracket is explicitly marked complete...
+    // OR the final match in the final round has a winner.
+    const finalRound = rounds[rounds.length - 1];
+    const finalMatch = finalRound && finalRound[0];
+    const hasChampion = bracket.structure.completed || (finalMatch && finalMatch.winner);
+    const championUser = bracket.structure.winner || (finalMatch && finalMatch.winner);
+
     return (
       <View style={styles.treeContainer}>
         {rounds.map((roundMatches, roundIndex) => {
@@ -207,7 +187,7 @@ export default function BracketEditScreen() {
         })}
 
         {/* CHAMPION COLUMN */}
-        {bracket.structure.completed && bracket.structure.winner && (
+        {hasChampion && championUser && (
           <>
             <View style={styles.connectorColumn}>
                <View style={styles.finalConnector} />
@@ -216,7 +196,7 @@ export default function BracketEditScreen() {
               <Text style={styles.championHeader}>🏆 CHAMPION</Text>
               <View style={styles.championCard}>
                 <Text style={styles.championEmoji}>👑</Text>
-                <Text style={styles.championName}>{bracket.structure.winner.name}</Text>
+                <Text style={styles.championName}>{championUser.name}</Text>
                 <Text style={styles.championSub}>WINNER</Text>
               </View>
             </View>
