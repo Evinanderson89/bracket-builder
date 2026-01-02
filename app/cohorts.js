@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useMemo } from 'react';
 import {
   View,
   Text,
@@ -9,6 +9,10 @@ import {
   SafeAreaView,
   Alert,
   Modal,
+  LayoutAnimation,
+  Platform,
+  UIManager,
+  Dimensions
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useApp } from '../context/AppContext';
@@ -16,246 +20,279 @@ import { Colors } from '../styles/colors';
 import { CohortStatus, CohortType } from '../utils/types';
 import NavigationHeader from '../components/NavigationHeader';
 
+if (Platform.OS === 'android' && UIManager.setLayoutAnimationEnabledExperimental) {
+  UIManager.setLayoutAnimationEnabledExperimental(true);
+}
+
+const { width } = Dimensions.get('window');
+
 export default function CohortsScreen() {
   const router = useRouter();
-  const { cohorts, addCohort, updateCohort, deleteCohort, verifyDeletePassword } = useApp();
-  const [cohortName, setCohortName] = useState('');
-  const [cohortType, setCohortType] = useState(CohortType.SCRATCH);
-  const [showForm, setShowForm] = useState(false);
+  const { cohorts, addCohort, deleteCohort } = useApp();
+  
+  // View State
+  const [activeTab, setActiveTab] = useState('active'); // 'active', 'setup', 'history'
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  
+  // Form State
+  const [newCohortName, setNewCohortName] = useState('');
+  const [newCohortType, setNewCohortType] = useState(CohortType.SCRATCH);
+  
+  // Delete State
   const [deleteModalVisible, setDeleteModalVisible] = useState(false);
   const [cohortToDelete, setCohortToDelete] = useState(null);
-  const [deletePassword, setDeletePassword] = useState('');
+
+  // --- Filtering Logic ---
+  const filteredCohorts = useMemo(() => {
+    switch (activeTab) {
+      case 'active':
+        return cohorts.filter(c => c.status === CohortStatus.ACTIVE);
+      case 'setup':
+        return cohorts.filter(c => c.status === CohortStatus.NOT_DEPLOYED);
+      case 'history':
+        return cohorts.filter(c => c.status === CohortStatus.COMPLETE);
+      default:
+        return cohorts;
+    }
+  }, [cohorts, activeTab]);
+
+  // --- Actions ---
 
   const handleCreateCohort = async () => {
-    if (!cohortName.trim()) {
-      Alert.alert('Error', 'Please enter a cohort name');
+    if (!newCohortName.trim()) {
+      Alert.alert('Missing Name', 'Please enter a name for the tournament group.');
       return;
     }
 
     await addCohort({
-      name: cohortName.trim(),
-      type: cohortType,
+      name: newCohortName.trim(),
+      type: newCohortType,
     });
 
-    setCohortName('');
-    setShowForm(false);
-    Alert.alert('Success', 'Cohort created successfully');
+    setNewCohortName('');
+    setShowCreateModal(false);
+    // Switch to setup tab to see the new cohort
+    setActiveTab('setup');
+    Alert.alert('Success', 'Tournament group created!');
   };
 
-  const getStatusColor = (status) => {
-    switch (status) {
-      case CohortStatus.ACTIVE:
-        return Colors.success;
-      case CohortStatus.COMPLETE:
-        return Colors.info;
-      default:
-        return Colors.warning;
-    }
-  };
-
-  const handleEditCohort = (cohort) => {
-    router.push({
-      pathname: '/cohort-detail',
-      params: { cohortId: cohort.id },
-    });
-  };
-
-  const handleDeleteCohort = (cohort) => {
+  const handleDeletePress = (cohort) => {
     setCohortToDelete(cohort);
-    setDeletePassword('');
     setDeleteModalVisible(true);
   };
 
   const confirmDelete = async () => {
-    if (!cohortToDelete) return;
-
-    if (!deletePassword.trim()) {
-      Alert.alert('Error', 'Please enter the delete password');
+    if (!cohortToDelete) {
+      Alert.alert('Error', 'No tournament selected for deletion.');
+      setDeleteModalVisible(false);
       return;
     }
 
-    if (!verifyDeletePassword(deletePassword.trim())) {
-      Alert.alert('Error', 'Incorrect password');
-      setDeletePassword('');
-      return;
+    try {
+      await deleteCohort(cohortToDelete.id);
+      setDeleteModalVisible(false);
+      setCohortToDelete(null);
+      Alert.alert('Success', `"${cohortToDelete.name}" has been deleted successfully.`);
+    } catch (error) {
+      Alert.alert('Error', error.message || 'Failed to delete tournament. Please try again.');
+      console.error('Delete cohort error:', error);
     }
-
-    Alert.alert(
-      'Confirm Delete',
-      `Are you sure you want to delete "${cohortToDelete.name}"? This will also delete all associated brackets, games, and payouts. This action cannot be undone.`,
-      [
-        {
-          text: 'Cancel',
-          style: 'cancel',
-          onPress: () => {
-            setDeleteModalVisible(false);
-            setCohortToDelete(null);
-            setDeletePassword('');
-          },
-        },
-        {
-          text: 'Delete',
-          style: 'destructive',
-          onPress: async () => {
-            await deleteCohort(cohortToDelete.id);
-            setDeleteModalVisible(false);
-            setCohortToDelete(null);
-            setDeletePassword('');
-            Alert.alert('Success', 'Cohort deleted successfully');
-          },
-        },
-      ]
-    );
   };
+
+  // --- Render Helpers ---
+
+  const renderTab = (key, label, icon) => (
+    <TouchableOpacity 
+      style={[styles.tab, activeTab === key && styles.tabActive]} 
+      onPress={() => {
+        LayoutAnimation.configureNext(LayoutAnimation.Presets.easeInEaseOut);
+        setActiveTab(key);
+      }}
+    >
+      <Text style={[styles.tabText, activeTab === key && styles.tabTextActive]}>
+        {icon} {label}
+      </Text>
+      {activeTab === key && <View style={styles.tabIndicator} />}
+    </TouchableOpacity>
+  );
 
   return (
     <SafeAreaView style={styles.container}>
-      <NavigationHeader title="Manage Cohorts" />
-      <View style={styles.actionBar}>
-        <TouchableOpacity
-          style={styles.addButton}
-          onPress={() => setShowForm(!showForm)}
-        >
-          <Text style={styles.addButtonText}>{showForm ? 'Cancel' : '+ Add Cohort'}</Text>
-        </TouchableOpacity>
+      <NavigationHeader title="Tournaments" />
+      
+      {/* TABS */}
+      <View style={styles.tabBar}>
+        {renderTab('active', 'Active', '🔥')}
+        {renderTab('setup', 'Setup', '🛠️')}
+        {renderTab('history', 'History', '🏁')}
       </View>
 
-      {showForm && (
-        <View style={styles.form}>
-          <Text style={styles.label}>Cohort Name</Text>
-          <TextInput
-            style={styles.input}
-            value={cohortName}
-            onChangeText={setCohortName}
-            placeholder="Enter cohort name"
-            placeholderTextColor={Colors.textLight}
-          />
-
-          <Text style={styles.label}>Type</Text>
-          <View style={styles.typeContainer}>
-            <TouchableOpacity
-              style={[
-                styles.typeButton,
-                cohortType === CohortType.SCRATCH && styles.typeButtonActive,
-              ]}
-              onPress={() => setCohortType(CohortType.SCRATCH)}
-            >
-              <Text
-                style={[
-                  styles.typeButtonText,
-                  cohortType === CohortType.SCRATCH && styles.typeButtonTextActive,
-                ]}
-              >
-                Scratch
-              </Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[
-                styles.typeButton,
-                cohortType === CohortType.HANDICAP && styles.typeButtonActive,
-              ]}
-              onPress={() => setCohortType(CohortType.HANDICAP)}
-            >
-              <Text
-                style={[
-                  styles.typeButtonText,
-                  cohortType === CohortType.HANDICAP && styles.typeButtonTextActive,
-                ]}
-              >
-                Handicap
-              </Text>
-            </TouchableOpacity>
-          </View>
-
-          <TouchableOpacity style={styles.createButton} onPress={handleCreateCohort}>
-            <Text style={styles.buttonText}>Create Cohort</Text>
-          </TouchableOpacity>
-        </View>
-      )}
-
-      <ScrollView style={styles.scrollView}>
-        {cohorts.length === 0 ? (
+      {/* CONTENT LIST */}
+      <ScrollView style={styles.listContainer} contentContainerStyle={styles.listContent}>
+        {filteredCohorts.length === 0 ? (
           <View style={styles.emptyState}>
-            <Text style={styles.emptyText}>No cohorts yet. Create one to get started!</Text>
+            <Text style={styles.emptyIcon}>
+              {activeTab === 'active' ? '😴' : activeTab === 'setup' ? '✨' : '📜'}
+            </Text>
+            <Text style={styles.emptyText}>
+              {activeTab === 'active' ? 'No active tournaments.' : 
+               activeTab === 'setup' ? 'No tournaments in setup.' : 
+               'No past tournaments.'}
+            </Text>
+            {activeTab === 'setup' && (
+              <TouchableOpacity style={styles.emptyCreateBtn} onPress={() => setShowCreateModal(true)}>
+                <Text style={styles.emptyCreateBtnText}>Create Your First One</Text>
+              </TouchableOpacity>
+            )}
           </View>
         ) : (
-          cohorts.map((cohort) => (
-            <View key={cohort.id} style={styles.cohortCard}>
-              <TouchableOpacity
-                style={styles.cohortCardContent}
-                onPress={() => handleEditCohort(cohort)}
-              >
-                <View style={styles.cohortHeader}>
-                  <Text style={styles.cohortName}>{cohort.name}</Text>
-                  <View
-                    style={[styles.statusBadge, { backgroundColor: getStatusColor(cohort.status) }]}
-                  >
-                    <Text style={styles.statusText}>{cohort.status}</Text>
-                  </View>
+          filteredCohorts.map((cohort) => (
+            <TouchableOpacity
+              key={cohort.id}
+              style={[
+                styles.cohortCard, 
+                activeTab === 'active' && styles.cohortCardActive
+              ]}
+              onPress={() => router.push({ pathname: '/cohort-detail', params: { cohortId: cohort.id } })}
+              activeOpacity={0.9}
+            >
+              <View style={styles.cardMain}>
+                <View style={styles.cardHeader}>
+                  <Text style={styles.cohortType}>{cohort.type}</Text>
+                  {cohort.status === CohortStatus.ACTIVE && (
+                    <View style={styles.liveBadge}>
+                      <View style={styles.liveDot} />
+                      <Text style={styles.liveText}>LIVE</Text>
+                    </View>
+                  )}
                 </View>
-                <Text style={styles.cohortType}>Type: {cohort.type}</Text>
-                <Text style={styles.cohortDate}>
-                  Created: {new Date(cohort.createdAt).toLocaleDateString()}
-                </Text>
-              </TouchableOpacity>
-              <TouchableOpacity
-                style={styles.deleteButton}
-                onPress={() => handleDeleteCohort(cohort)}
-              >
-                <Text style={styles.deleteButtonText}>Delete</Text>
-              </TouchableOpacity>
-            </View>
+                
+                <Text style={styles.cohortName}>{cohort.name}</Text>
+                
+                <View style={styles.statsRow}>
+                  <Text style={styles.statsText}>
+                     📅 {new Date(cohort.createdAt).toLocaleDateString()}
+                  </Text>
+                </View>
+              </View>
+
+              {/* Quick Actions Footer */}
+              <View style={styles.cardFooter}>
+                <TouchableOpacity 
+                  style={styles.actionBtn}
+                  onPress={() => router.push({ pathname: '/cohort-detail', params: { cohortId: cohort.id } })}
+                >
+                  <Text style={styles.actionBtnText}>Open Dashboard →</Text>
+                </TouchableOpacity>
+
+                <TouchableOpacity 
+                  style={styles.deleteIconBtn}
+                  onPress={(e) => {
+                    e.stopPropagation();
+                    handleDeletePress(cohort);
+                  }}
+                >
+                  <Text style={styles.deleteIconText}>🗑️</Text>
+                </TouchableOpacity>
+              </View>
+            </TouchableOpacity>
           ))
         )}
+        <View style={{ height: 80 }} /> 
       </ScrollView>
 
+      {/* Floating Create Button */}
+      <TouchableOpacity 
+        style={styles.fab} 
+        onPress={() => setShowCreateModal(true)}
+      >
+        <Text style={styles.fabText}>+ New</Text>
+      </TouchableOpacity>
+
+      {/* CREATE MODAL */}
       <Modal
-        visible={deleteModalVisible}
+        visible={showCreateModal}
         transparent={true}
         animationType="slide"
-        onRequestClose={() => {
-          setDeleteModalVisible(false);
-          setCohortToDelete(null);
-          setDeletePassword('');
-        }}
+        onRequestClose={() => setShowCreateModal(false)}
       >
         <View style={styles.modalOverlay}>
-          <View style={styles.modalContent}>
-            <Text style={styles.modalTitle}>Delete Cohort</Text>
-            {cohortToDelete && (
-              <Text style={styles.modalSubtitle}>
-                {cohortToDelete.name}
-              </Text>
-            )}
-            <Text style={styles.modalWarning}>
-              ⚠️ This will delete the cohort and all associated brackets, games, and payouts. This action cannot be undone.
-            </Text>
-            <Text style={styles.modalLabel}>Enter Delete Password</Text>
+          <View style={styles.createModalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>New Tournament Group</Text>
+              <TouchableOpacity onPress={() => setShowCreateModal(false)}>
+                <Text style={styles.closeText}>✕</Text>
+              </TouchableOpacity>
+            </View>
+            
+            <Text style={styles.label}>Name</Text>
             <TextInput
-              style={styles.modalInput}
-              value={deletePassword}
-              onChangeText={setDeletePassword}
-              placeholder="Enter password"
-              secureTextEntry
+              style={styles.input}
+              value={newCohortName}
+              onChangeText={setNewCohortName}
+              placeholder="e.g. Thursday Night League"
               placeholderTextColor={Colors.textLight}
               autoFocus
             />
-            <View style={styles.modalButtons}>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonCancel]}
+            
+            <Text style={styles.label}>Format</Text>
+            <View style={styles.typeSelector}>
+              {[CohortType.SCRATCH, CohortType.HANDICAP].map((type) => (
+                <TouchableOpacity
+                  key={type}
+                  style={[
+                    styles.typeOption,
+                    newCohortType === type && styles.typeOptionSelected
+                  ]}
+                  onPress={() => setNewCohortType(type)}
+                >
+                  <Text style={[
+                    styles.typeText,
+                    newCohortType === type && styles.typeTextSelected
+                  ]}>{type}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+
+            <TouchableOpacity style={styles.createSubmitBtn} onPress={handleCreateCohort}>
+              <Text style={styles.createSubmitText}>Create Group</Text>
+            </TouchableOpacity>
+          </View>
+        </View>
+      </Modal>
+
+      {/* DELETE MODAL */}
+      <Modal
+        visible={deleteModalVisible}
+        transparent={true}
+        animationType="fade"
+        onRequestClose={() => {
+          setDeleteModalVisible(false);
+          setCohortToDelete(null);
+        }}
+      >
+        <View style={styles.modalOverlay}>
+          <View style={styles.deleteModalContent}>
+            <Text style={styles.deleteTitle}>Delete Tournament?</Text>
+            <Text style={styles.deleteWarning}>
+              Are you sure you want to delete "{cohortToDelete?.name}"?{'\n\n'}
+              This will permanently delete the tournament and all associated data (brackets, games, payouts).
+            </Text>
+            <View style={styles.modalActions}>
+              <TouchableOpacity 
+                style={styles.cancelBtn}
                 onPress={() => {
                   setDeleteModalVisible(false);
                   setCohortToDelete(null);
-                  setDeletePassword('');
                 }}
               >
-                <Text style={styles.modalButtonText}>Cancel</Text>
+                <Text style={styles.cancelText}>Cancel</Text>
               </TouchableOpacity>
-              <TouchableOpacity
-                style={[styles.modalButton, styles.modalButtonDelete]}
+              <TouchableOpacity 
+                style={styles.confirmDeleteBtn}
                 onPress={confirmDelete}
               >
-                <Text style={[styles.modalButtonText, styles.modalButtonTextDelete]}>Delete</Text>
+                <Text style={styles.confirmDeleteText}>Delete</Text>
               </TouchableOpacity>
             </View>
           </View>
@@ -270,34 +307,226 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  actionBar: {
+  
+  // Tabs
+  tabBar: {
+    flexDirection: 'row',
     backgroundColor: Colors.surface,
-    padding: 16,
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
-  addButton: {
+  tab: {
+    flex: 1,
+    paddingVertical: 16,
+    alignItems: 'center',
+    position: 'relative',
+  },
+  tabActive: {
+    backgroundColor: Colors.surfaceSecondary,
+  },
+  tabText: {
+    color: Colors.textSecondary,
+    fontWeight: '600',
+    fontSize: 14,
+  },
+  tabTextActive: {
+    color: Colors.primary,
+    fontWeight: 'bold',
+  },
+  tabIndicator: {
+    position: 'absolute',
+    bottom: 0,
+    height: 3,
+    width: '100%',
     backgroundColor: Colors.primary,
-    paddingHorizontal: 16,
-    paddingVertical: 8,
+  },
+
+  // List
+  listContainer: {
+    flex: 1,
+  },
+  listContent: {
+    padding: 16,
+    paddingBottom: 100,
+  },
+  emptyState: {
+    marginTop: 60,
+    alignItems: 'center',
+  },
+  emptyIcon: {
+    fontSize: 40,
+    marginBottom: 16,
+  },
+  emptyText: {
+    color: Colors.textSecondary,
+    fontSize: 16,
+    textAlign: 'center',
+    marginBottom: 20,
+  },
+  emptyCreateBtn: {
+    backgroundColor: Colors.primary,
+    paddingHorizontal: 20,
+    paddingVertical: 12,
     borderRadius: 8,
   },
-  addButtonText: {
+  emptyCreateBtnText: {
     color: Colors.white,
-    fontWeight: '600',
+    fontWeight: 'bold',
   },
-  form: {
+
+  // Cards
+  cohortCard: {
     backgroundColor: Colors.surface,
+    borderRadius: 12,
+    marginBottom: 16,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    overflow: 'hidden',
+    shadowColor: Colors.shadow,
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    elevation: 3,
+  },
+  cohortCardActive: {
+    borderColor: Colors.primary,
+    borderWidth: 2,
+  },
+  cardMain: {
+    padding: 16,
+  },
+  cardHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
+  cohortType: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    fontWeight: 'bold',
+  },
+  liveBadge: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    backgroundColor: 'rgba(239, 68, 68, 0.2)', // Red tint
+    paddingHorizontal: 8,
+    paddingVertical: 4,
+    borderRadius: 12,
+  },
+  liveDot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Colors.danger,
+    marginRight: 4,
+  },
+  liveText: {
+    color: Colors.danger,
+    fontSize: 10,
+    fontWeight: 'bold',
+  },
+  cohortName: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: Colors.white,
+    marginBottom: 8,
+  },
+  statsRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  statsText: {
+    color: Colors.textSecondary,
+    fontSize: 12,
+  },
+  
+  // Card Footer
+  cardFooter: {
+    flexDirection: 'row',
+    borderTopWidth: 1,
+    borderTopColor: Colors.border,
+    backgroundColor: Colors.surfaceSecondary,
+  },
+  actionBtn: {
+    flex: 1,
+    padding: 12,
+    alignItems: 'center',
+    borderRightWidth: 1,
+    borderRightColor: Colors.border,
+  },
+  actionBtnText: {
+    color: Colors.primary,
+    fontWeight: 'bold',
+    fontSize: 14,
+  },
+  deleteIconBtn: {
+    padding: 12,
+    width: 50,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  deleteIconText: {
+    fontSize: 16,
+    opacity: 0.7,
+  },
+
+  // FAB
+  fab: {
+    position: 'absolute',
+    bottom: 24,
+    right: 24,
+    backgroundColor: Colors.success,
+    paddingVertical: 16,
+    paddingHorizontal: 24,
+    borderRadius: 30,
+    shadowColor: Colors.success,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    elevation: 8,
+  },
+  fabText: {
+    color: Colors.white,
+    fontWeight: 'bold',
+    fontSize: 16,
+  },
+
+  // Modals
+  modalOverlay: {
+    flex: 1,
+    backgroundColor: 'rgba(0,0,0,0.8)',
+    justifyContent: 'center',
     padding: 20,
-    borderBottomWidth: 1,
-    borderBottomColor: Colors.border,
+  },
+  createModalContent: {
+    backgroundColor: Colors.surface,
+    borderRadius: 16,
+    padding: 24,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 20,
+  },
+  modalTitle: {
+    fontSize: 20,
+    fontWeight: 'bold',
+    color: Colors.white,
+  },
+  closeText: {
+    fontSize: 24,
+    color: Colors.textSecondary,
   },
   label: {
-    fontSize: 16,
+    color: Colors.textSecondary,
+    fontSize: 12,
     fontWeight: '600',
-    color: Colors.textPrimary,
     marginBottom: 8,
-    marginTop: 12,
+    textTransform: 'uppercase',
   },
   input: {
     backgroundColor: Colors.background,
@@ -305,182 +534,89 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
     borderRadius: 8,
     padding: 12,
-    fontSize: 16,
-    color: Colors.textPrimary,
+    color: Colors.white,
+    marginBottom: 20,
   },
-  typeContainer: {
+  typeSelector: {
     flexDirection: 'row',
     gap: 12,
-    marginTop: 8,
+    marginBottom: 24,
   },
-  typeButton: {
+  typeOption: {
     flex: 1,
     padding: 12,
     borderRadius: 8,
-    borderWidth: 2,
+    borderWidth: 1,
     borderColor: Colors.border,
     alignItems: 'center',
+    backgroundColor: Colors.background,
   },
-  typeButtonActive: {
+  typeOptionSelected: {
     borderColor: Colors.primary,
-    backgroundColor: Colors.primary,
+    backgroundColor: 'rgba(59, 130, 246, 0.1)',
   },
-  typeButtonText: {
-    fontSize: 16,
-    color: Colors.textPrimary,
+  typeText: {
+    color: Colors.textSecondary,
     fontWeight: '600',
   },
-  typeButtonTextActive: {
-    color: Colors.white,
+  typeTextSelected: {
+    color: Colors.primary,
+    fontWeight: 'bold',
   },
-  createButton: {
+  createSubmitBtn: {
     backgroundColor: Colors.success,
     padding: 16,
     borderRadius: 8,
-    marginTop: 20,
     alignItems: 'center',
   },
-  buttonText: {
+  createSubmitText: {
     color: Colors.white,
+    fontWeight: 'bold',
     fontSize: 16,
-    fontWeight: '600',
   },
-  scrollView: {
-    flex: 1,
-  },
-  emptyState: {
-    padding: 40,
-    alignItems: 'center',
-  },
-  emptyText: {
-    fontSize: 16,
-    color: Colors.textSecondary,
-    textAlign: 'center',
-  },
-  cohortCard: {
+
+  // Delete Modal Specific
+  deleteModalContent: {
     backgroundColor: Colors.surface,
-    margin: 16,
-    borderRadius: 8,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    overflow: 'hidden',
-  },
-  cohortCardContent: {
-    padding: 16,
-  },
-  deleteButton: {
-    backgroundColor: Colors.danger,
-    padding: 12,
-    alignItems: 'center',
-    borderTopWidth: 1,
-    borderTopColor: Colors.border,
-  },
-  deleteButtonText: {
-    color: Colors.white,
-    fontSize: 14,
-    fontWeight: '600',
-  },
-  modalOverlay: {
-    flex: 1,
-    backgroundColor: 'rgba(0, 0, 0, 0.5)',
-    justifyContent: 'center',
-    alignItems: 'center',
-  },
-  modalContent: {
-    backgroundColor: Colors.surface,
-    borderRadius: 12,
+    borderRadius: 16,
     padding: 24,
-    width: '80%',
-    maxWidth: 400,
+    borderWidth: 1,
+    borderColor: Colors.danger,
   },
-  modalTitle: {
+  deleteTitle: {
     fontSize: 20,
     fontWeight: 'bold',
-    color: Colors.textPrimary,
+    color: Colors.danger,
     marginBottom: 8,
   },
-  modalSubtitle: {
-    fontSize: 16,
+  deleteWarning: {
     color: Colors.textSecondary,
-    marginBottom: 16,
-  },
-  modalWarning: {
-    fontSize: 14,
-    color: Colors.danger,
     marginBottom: 20,
     lineHeight: 20,
   },
-  modalLabel: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.textPrimary,
-    marginBottom: 8,
+  modalActions: {
+    flexDirection: 'row',
+    justifyContent: 'flex-end',
+    gap: 12,
+    marginTop: 8,
   },
-  modalInput: {
-    backgroundColor: Colors.background,
+  cancelBtn: {
+    padding: 12,
+    borderRadius: 8,
     borderWidth: 1,
     borderColor: Colors.border,
-    borderRadius: 8,
-    padding: 12,
-    fontSize: 16,
+  },
+  cancelText: {
     color: Colors.textPrimary,
-    marginBottom: 20,
+    fontWeight: '600',
   },
-  modalButtons: {
-    flexDirection: 'row',
-    gap: 12,
-  },
-  modalButton: {
-    flex: 1,
-    padding: 12,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  modalButtonCancel: {
-    backgroundColor: Colors.border,
-  },
-  modalButtonDelete: {
+  confirmDeleteBtn: {
     backgroundColor: Colors.danger,
+    padding: 12,
+    borderRadius: 8,
   },
-  modalButtonText: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.textPrimary,
-  },
-  modalButtonTextDelete: {
+  confirmDeleteText: {
     color: Colors.white,
-  },
-  cohortHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 8,
-  },
-  cohortName: {
-    fontSize: 18,
     fontWeight: 'bold',
-    color: Colors.textPrimary,
-    flex: 1,
-  },
-  statusBadge: {
-    paddingHorizontal: 12,
-    paddingVertical: 4,
-    borderRadius: 12,
-  },
-  statusText: {
-    color: Colors.white,
-    fontSize: 12,
-    fontWeight: '600',
-    textTransform: 'capitalize',
-  },
-  cohortType: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    marginBottom: 4,
-  },
-  cohortDate: {
-    fontSize: 12,
-    color: Colors.textLight,
   },
 });
-

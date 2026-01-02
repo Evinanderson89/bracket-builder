@@ -25,25 +25,18 @@ export const createBrackets = (users) => {
   const usedUserIdsInCurrentBracket = new Set();
   
   for (const user of shuffledUsers) {
-    // If we have a full bracket, save it and start a new one
     if (currentBracket.length === 8) {
       brackets.push([...currentBracket]);
       currentBracket = [];
       usedUserIdsInCurrentBracket.clear();
     }
     
-    // Only add user if their ID hasn't been used in this bracket
-    // This ensures each user appears only once per bracket
     if (!usedUserIdsInCurrentBracket.has(user.id)) {
       currentBracket.push(user);
       usedUserIdsInCurrentBracket.add(user.id);
     }
-    // If user ID already in bracket, skip this instance
-    // (they can appear in other brackets, but not twice in the same one)
   }
   
-  // Add the last bracket if it has exactly 8 users
-  // Don't add incomplete brackets (less than 8 users)
   if (currentBracket.length === 8) {
     brackets.push(currentBracket);
   }
@@ -52,50 +45,60 @@ export const createBrackets = (users) => {
 };
 
 /**
- * Create step ladder bracket structure
- * Ensures no user bowls against themselves
- * Returns bracket with matchups for each round
+ * Create a full, pre-filled bracket structure (Standard 8-player Single Elimination)
+ * Pre-filling ensures the visual tree is fully rendered with empty slots.
  */
 export const createStepLadderStructure = (users) => {
-  // Step ladder: 8 -> 4 -> 2 -> 1
-  // Round 1: 8 players, 4 matches
-  // Round 2: 4 players, 2 matches
-  // Round 3: 2 players, 1 match (final)
-  // Winner: 1 player
+  // Standard 8-player Single Elimination
+  // Round 1: 4 matches
+  // Round 2: 2 matches
+  // Round 3: 1 match (Final)
   
   const rounds = [];
   
-  // Round 1: Pair up all 8 players, ensuring no user plays against themselves
+  // --- Round 1 (Quarter-Finals) ---
+  // Pair up all 8 players
   const round1 = [];
-  const shuffled = shuffleArray([...users]); // Shuffle to randomize pairings
+  const shuffled = shuffleArray([...users]); 
   
   for (let i = 0; i < shuffled.length; i += 2) {
     if (i + 1 < shuffled.length) {
-      const player1 = shuffled[i];
-      const player2 = shuffled[i + 1];
-      
-      // Double-check: ensure player1 and player2 are different users
-      if (player1.id !== player2.id) {
-        round1.push({
-          player1: player1,
-          player2: player2,
-          winner: null,
-          completed: false,
-        });
-      } else {
-        // If somehow same user, try to find a different pairing
-        // This shouldn't happen if createBrackets works correctly, but safety check
-        console.warn('Attempted to pair user with themselves, skipping match');
-      }
+      round1.push({
+        id: `r1_m${i/2}`,
+        player1: shuffled[i],
+        player2: shuffled[i+1],
+        winner: null,
+        completed: false,
+      });
     }
   }
   rounds.push(round1);
   
-  // Round 2: Will have 2 matches (4 players)
-  rounds.push([]);
+  // --- Round 2 (Semi-Finals) ---
+  // Pre-fill with 2 empty matches
+  const round2 = [];
+  for (let i = 0; i < 2; i++) {
+    round2.push({
+      id: `r2_m${i}`,
+      player1: null, // TBD
+      player2: null, // TBD
+      winner: null,
+      completed: false,
+    });
+  }
+  rounds.push(round2);
   
-  // Round 3: Will have 1 match (2 players - final)
-  rounds.push([]);
+  // --- Round 3 (Finals) ---
+  // Pre-fill with 1 empty match
+  const round3 = [];
+  round3.push({
+    id: `r3_m0`,
+    player1: null, // TBD
+    player2: null, // TBD
+    winner: null,
+    completed: false,
+  });
+  rounds.push(round3);
   
   return {
     rounds,
@@ -109,7 +112,7 @@ export const createStepLadderStructure = (users) => {
  */
 export const calculateTotalScore = (score, handicap, isHandicap) => {
   if (isHandicap) {
-    return score + handicap;
+    return score + (handicap || 0);
   }
   return score;
 };
@@ -122,59 +125,53 @@ export const advanceWinner = (bracket, roundIndex, matchIndex, winner) => {
   const structure = updatedBracket.structure || updatedBracket;
   const rounds = structure.rounds || structure;
   
-  // Mark match as completed and set winner
-  rounds[roundIndex][matchIndex].completed = true;
-  rounds[roundIndex][matchIndex].winner = winner;
+  // 1. Mark current match as completed
+  if (rounds[roundIndex] && rounds[roundIndex][matchIndex]) {
+    rounds[roundIndex][matchIndex].completed = true;
+    rounds[roundIndex][matchIndex].winner = winner;
+  }
   
-  // If not the final round, advance to next round
+  // 2. Advance to next round if applicable
   if (roundIndex < rounds.length - 1) {
     const nextRoundIndex = roundIndex + 1;
+    // Determine next match index: (0,1) -> 0; (2,3) -> 1
     const nextMatchIndex = Math.floor(matchIndex / 2);
     
-    // Initialize next round if needed
-    if (!rounds[nextRoundIndex]) {
-      rounds[nextRoundIndex] = [];
-    }
-    
-    // Create or update match in next round
+    // Safety check: ensure next round/match exists (it should with pre-filled structure)
+    if (!rounds[nextRoundIndex]) rounds[nextRoundIndex] = [];
     if (!rounds[nextRoundIndex][nextMatchIndex]) {
-      rounds[nextRoundIndex][nextMatchIndex] = {
-        player1: null,
-        player2: null,
-        winner: null,
-        completed: false,
-      };
+       rounds[nextRoundIndex][nextMatchIndex] = {
+         player1: null, player2: null, winner: null, completed: false
+       };
     }
     
-    // Set winner as player1 or player2 in next match
-    // Ensure we don't pair a user with themselves
+    const nextMatch = rounds[nextRoundIndex][nextMatchIndex];
+
+    // Determine slot based on current match index (even -> Top/Player1, odd -> Bottom/Player2)
     if (matchIndex % 2 === 0) {
-      // Check if player2 already exists and is the same user
-      if (rounds[nextRoundIndex][nextMatchIndex].player2?.id === winner.id) {
-        // Swap positions to avoid self-pairing
-        rounds[nextRoundIndex][nextMatchIndex].player2 = rounds[nextRoundIndex][nextMatchIndex].player1;
-        rounds[nextRoundIndex][nextMatchIndex].player1 = winner;
+      // Coming from Top (e.g., Match 0 or 2) -> Player 1 slot
+      
+      // Self-pairing check: If Player 2 is already this user, swap them to avoid P1 vs P1
+      if (nextMatch.player2?.id === winner.id) {
+         nextMatch.player2 = nextMatch.player1; // Swap out
+         nextMatch.player1 = winner;
       } else {
-        rounds[nextRoundIndex][nextMatchIndex].player1 = winner;
+         nextMatch.player1 = winner;
       }
     } else {
-      // Check if player1 already exists and is the same user
-      if (rounds[nextRoundIndex][nextMatchIndex].player1?.id === winner.id) {
-        // Swap positions to avoid self-pairing
-        rounds[nextRoundIndex][nextMatchIndex].player1 = rounds[nextRoundIndex][nextMatchIndex].player2;
-        rounds[nextRoundIndex][nextMatchIndex].player2 = winner;
+      // Coming from Bottom (e.g., Match 1 or 3) -> Player 2 slot
+      
+      // Self-pairing check
+      if (nextMatch.player1?.id === winner.id) {
+        nextMatch.player1 = nextMatch.player2; // Swap out
+        nextMatch.player2 = winner;
       } else {
-        rounds[nextRoundIndex][nextMatchIndex].player2 = winner;
+        nextMatch.player2 = winner;
       }
     }
     
-    // Final safety check: if both players are the same, log warning
-    const nextMatch = rounds[nextRoundIndex][nextMatchIndex];
-    if (nextMatch.player1 && nextMatch.player2 && nextMatch.player1.id === nextMatch.player2.id) {
-      console.error('Error: Attempted to create match with same user on both sides');
-    }
   } else {
-    // Final round - set as winner
+    // Final Round Completed
     structure.winner = winner;
     structure.completed = true;
   }
@@ -188,4 +185,3 @@ export const advanceWinner = (bracket, roundIndex, matchIndex, winner) => {
 export const isBracketComplete = (bracket) => {
   return bracket.completed && bracket.winner !== null;
 };
-
