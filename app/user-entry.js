@@ -1,278 +1,174 @@
 import React, { useState, useMemo } from 'react';
-import {
-  View,
-  Text,
-  TextInput,
-  TouchableOpacity,
-  StyleSheet,
-  ScrollView,
-  SafeAreaView,
-  Alert,
-} from 'react-native';
-import { useRouter } from 'expo-router';
-import { useAuth } from '../context/AuthContext';
+import { View, Text, TouchableOpacity, StyleSheet, SafeAreaView, ScrollView, TextInput, Alert, Modal } from 'react-native';
 import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 import { Colors } from '../styles/colors';
-import { CohortStatus } from '../utils/types';
 import NavigationHeader from '../components/NavigationHeader';
+import { CohortStatus } from '../utils/types';
 
 export default function UserEntryScreen() {
-  const router = useRouter();
   const { user } = useAuth();
-  const { cohorts, users, updateCohort } = useApp();
-  
-  const [selectedCohortId, setSelectedCohortId] = useState(null);
-  const [numBrackets, setNumBrackets] = useState('1');
+  const { cohorts, updateCohort, users } = useApp();
+  const [selectedCohort, setSelectedCohort] = useState(null);
+  const [bracketCount, setBracketCount] = useState('1');
+  const [modalVisible, setModalVisible] = useState(false);
 
-  // Find the player profile
-  const playerProfile = useMemo(() => {
-    if (!user?.email) return null;
-    return users.find(u => u.email?.toLowerCase() === user.email.toLowerCase());
-  }, [users, user]);
-
-  // Get available cohorts (not deployed or active)
-  const availableCohorts = useMemo(() => {
-    return cohorts.filter(c => 
-      c.status === CohortStatus.NOT_DEPLOYED || c.status === CohortStatus.ACTIVE
-    );
+  // Filter for OPEN (Not Deployed) tournaments
+  const openCohorts = useMemo(() => {
+    return cohorts
+      .filter(c => c.status === CohortStatus.NOT_DEPLOYED)
+      .sort((a, b) => new Date(b.createdAt) - new Date(a.createdAt));
   }, [cohorts]);
 
-  const handleSubmit = async () => {
-    if (!selectedCohortId) {
-      Alert.alert('Error', 'Please select a tournament');
+  const handleJoinPress = (cohort) => {
+    setSelectedCohort(cohort);
+    setBracketCount('1'); // Reset default
+    setModalVisible(true);
+  };
+
+  const confirmJoin = async () => {
+    if (!selectedCohort || !user) return;
+
+    // Find the real Player ID based on Auth Name
+    const player = users.find(u => u.name.toLowerCase() === user.name.toLowerCase());
+    
+    if (!player) {
+      Alert.alert("Profile Not Found", "Please create a player profile on the dashboard first.");
+      setModalVisible(false);
       return;
     }
 
-    if (!playerProfile) {
-      Alert.alert('Error', 'Please create a player profile first');
-      router.push('/user-profile');
-      return;
-    }
-
-    const bracketCount = parseInt(numBrackets, 10);
-    if (isNaN(bracketCount) || bracketCount < 1) {
-      Alert.alert('Error', 'Please enter a valid number of brackets');
+    const count = parseInt(bracketCount);
+    if (isNaN(count) || count < 1) {
+      Alert.alert("Invalid Entry", "Please enter at least 1 bracket.");
       return;
     }
 
     try {
-      const cohort = cohorts.find(c => c.id === selectedCohortId);
-      if (!cohort) {
-        Alert.alert('Error', 'Tournament not found');
-        return;
-      }
+      // Add user to selected list if not there
+      const currentSelected = selectedCohort.selectedUserIds || [];
+      const newSelected = currentSelected.includes(player.id) ? currentSelected : [...currentSelected, player.id];
 
-      // Add user to cohort if not already added
-      const selectedUserIds = cohort.selectedUserIds || [];
-      if (!selectedUserIds.includes(playerProfile.id)) {
-        selectedUserIds.push(playerProfile.id);
-      }
+      // Update the count for this specific user
+      const newCounts = { ...selectedCohort.userBracketCounts, [player.id]: count };
 
-      // Update user bracket count for this cohort
-      const userBracketCounts = cohort.userBracketCounts || {};
-      userBracketCounts[playerProfile.id] = bracketCount;
-
-      await updateCohort(selectedCohortId, {
-        selectedUserIds,
-        userBracketCounts,
+      await updateCohort(selectedCohort.id, {
+        selectedUserIds: newSelected,
+        userBracketCounts: newCounts
       });
 
-      Alert.alert(
-        'Success',
-        `You've been entered into "${cohort.name}" with ${bracketCount} bracket${bracketCount !== 1 ? 's' : ''}`,
-        [
-          {
-            text: 'OK',
-            onPress: () => router.back(),
-          },
-        ]
-      );
-    } catch (error) {
-      Alert.alert('Error', error.message || 'Failed to enter tournament');
+      Alert.alert("Success", `You requested ${count} brackets for ${selectedCohort.name}.`);
+      setModalVisible(false);
+    } catch (e) {
+      Alert.alert("Error", e.message);
     }
   };
-
-  if (!playerProfile) {
-    return (
-      <SafeAreaView style={styles.container}>
-        <NavigationHeader title="Enter Tournament" />
-        <View style={styles.emptyContainer}>
-          <Text style={styles.emptyText}>Please create a player profile first</Text>
-          <TouchableOpacity
-            style={styles.button}
-            onPress={() => router.push('/user-profile')}
-          >
-            <Text style={styles.buttonText}>Create Profile</Text>
-          </TouchableOpacity>
-        </View>
-      </SafeAreaView>
-    );
-  }
 
   return (
     <SafeAreaView style={styles.container}>
       <NavigationHeader title="Enter Tournament" />
       
       <ScrollView style={styles.content}>
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Select Tournament</Text>
-          {availableCohorts.length === 0 ? (
-            <Text style={styles.emptyText}>No tournaments available for entry</Text>
-          ) : (
-            availableCohorts.map(cohort => (
-              <TouchableOpacity
-                key={cohort.id}
-                style={[
-                  styles.cohortOption,
-                  selectedCohortId === cohort.id && styles.cohortOptionSelected,
-                ]}
-                onPress={() => setSelectedCohortId(cohort.id)}
-              >
-                <View style={styles.cohortInfo}>
-                  <Text style={styles.cohortName}>{cohort.name}</Text>
-                  <Text style={styles.cohortType}>{cohort.type}</Text>
-                </View>
-                {selectedCohortId === cohort.id && (
-                  <Text style={styles.checkmark}>✓</Text>
-                )}
-              </TouchableOpacity>
-            ))
-          )}
-        </View>
-
-        {selectedCohortId && (
-          <View style={styles.section}>
-            <Text style={styles.sectionTitle}>Number of Brackets</Text>
-            <Text style={styles.label}>
-              How many brackets would you like to enter?
-            </Text>
-            <TextInput
-              style={styles.input}
-              value={numBrackets}
-              onChangeText={setNumBrackets}
-              placeholder="1"
-              keyboardType="numeric"
-              placeholderTextColor={Colors.textLight}
-            />
-            <Text style={styles.hint}>
-              Each bracket entry costs the same. You'll be randomly placed in brackets.
-            </Text>
+        <Text style={styles.sectionTitle}>Upcoming Events</Text>
+        
+        {openCohorts.length === 0 ? (
+          <View style={styles.emptyState}>
+            <Text style={styles.emptyIcon}>📅</Text>
+            <Text style={styles.emptyText}>No upcoming tournaments found.</Text>
+            <Text style={styles.emptySub}>Check back later!</Text>
           </View>
-        )}
-
-        {selectedCohortId && (
-          <TouchableOpacity style={styles.submitButton} onPress={handleSubmit}>
-            <Text style={styles.submitButtonText}>Enter Tournament</Text>
-          </TouchableOpacity>
+        ) : (
+          openCohorts.map(cohort => {
+            const player = users.find(u => u.name.toLowerCase() === user?.name.toLowerCase());
+            const myCount = player && cohort.userBracketCounts?.[player.id] ? cohort.userBracketCounts[player.id] : 0;
+            
+            return (
+              <View key={cohort.id} style={styles.card}>
+                <View style={styles.cardInfo}>
+                  <Text style={styles.cardTitle}>{cohort.name}</Text>
+                  <Text style={styles.cardDetail}>{cohort.type} • {new Date(cohort.createdAt).toLocaleDateString()}</Text>
+                  
+                  {myCount > 0 && (
+                     <Text style={styles.joinedBadge}>✅ You have {myCount} brackets requested</Text>
+                  )}
+                </View>
+                
+                <TouchableOpacity style={styles.joinBtn} onPress={() => handleJoinPress(cohort)}>
+                  <Text style={styles.joinBtnText}>{myCount > 0 ? 'Update' : 'Join'}</Text>
+                </TouchableOpacity>
+              </View>
+            );
+          })
         )}
       </ScrollView>
+
+      {/* Entry Modal */}
+      <Modal visible={modalVisible} transparent={true} animationType="fade" onRequestClose={() => setModalVisible(false)}>
+        <View style={styles.modalOverlay}>
+          <View style={styles.modalContent}>
+            <Text style={styles.modalTitle}>Join {selectedCohort?.name}</Text>
+            <Text style={styles.modalSub}>How many brackets do you want to enter?</Text>
+            <Text style={styles.costInfo}>$5.00 per bracket</Text>
+            
+            <View style={styles.inputContainer}>
+              <TextInput 
+                style={styles.input} 
+                value={bracketCount} 
+                onChangeText={setBracketCount} 
+                keyboardType="numeric" 
+                autoFocus 
+              />
+              <Text style={styles.totalText}>Total: ${(parseInt(bracketCount) || 0) * 5}</Text>
+            </View>
+
+            <View style={styles.modalActions}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => setModalVisible(false)}>
+                <Text style={styles.cancelText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.confirmBtn} onPress={confirmJoin}>
+                <Text style={styles.confirmText}>Submit Request</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </View>
+      </Modal>
+
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  content: {
-    flex: 1,
-  },
-  emptyContainer: {
-    flex: 1,
-    justifyContent: 'center',
-    alignItems: 'center',
-    padding: 32,
-  },
-  emptyText: {
-    fontSize: 16,
-    color: Colors.textSecondary,
-    textAlign: 'center',
-    marginBottom: 16,
-  },
-  section: {
-    padding: 16,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: 'bold',
-    color: Colors.white,
-    marginBottom: 16,
-  },
-  cohortOption: {
-    backgroundColor: Colors.surface,
-    padding: 16,
-    borderRadius: 8,
-    marginBottom: 12,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  cohortOptionSelected: {
-    borderColor: Colors.primary,
-    backgroundColor: Colors.surfaceSecondary,
-  },
-  cohortInfo: {
-    flex: 1,
-  },
-  cohortName: {
-    fontSize: 16,
-    fontWeight: '600',
-    color: Colors.white,
-    marginBottom: 4,
-  },
-  cohortType: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-  },
-  checkmark: {
-    fontSize: 20,
-    color: Colors.primary,
-    fontWeight: 'bold',
-  },
-  label: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    marginBottom: 8,
-  },
-  input: {
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 8,
-    padding: 12,
-    color: Colors.white,
-    fontSize: 16,
-    marginBottom: 8,
-  },
-  hint: {
-    fontSize: 12,
-    color: Colors.textLight,
-    fontStyle: 'italic',
-  },
-  submitButton: {
-    backgroundColor: Colors.primary,
-    padding: 16,
-    margin: 16,
-    borderRadius: 8,
-    alignItems: 'center',
-  },
-  submitButtonText: {
-    color: Colors.white,
-    fontSize: 16,
-    fontWeight: '600',
-  },
-  button: {
-    backgroundColor: Colors.primary,
-    paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 8,
-  },
-  buttonText: {
-    color: Colors.white,
-    fontWeight: '600',
-  },
-});
+  container: { flex: 1, backgroundColor: Colors.background },
+  content: { padding: 16 },
+  sectionTitle: { color: Colors.white, fontSize: 18, fontWeight: 'bold', marginBottom: 16 },
+  
+  card: { backgroundColor: Colors.surface, padding: 16, borderRadius: 12, marginBottom: 12, borderWidth: 1, borderColor: Colors.border, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  cardInfo: { flex: 1 },
+  cardTitle: { color: Colors.white, fontSize: 16, fontWeight: 'bold', marginBottom: 4 },
+  cardDetail: { color: Colors.textSecondary, fontSize: 12 },
+  joinedBadge: { color: Colors.success, fontSize: 12, marginTop: 6, fontWeight: 'bold' },
+  
+  joinBtn: { backgroundColor: Colors.primary, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 8 },
+  joinBtnText: { color: Colors.white, fontWeight: 'bold' },
 
+  emptyState: { alignItems: 'center', marginTop: 60 },
+  emptyIcon: { fontSize: 40, marginBottom: 10 },
+  emptyText: { color: Colors.white, fontSize: 16, fontWeight: 'bold' },
+  emptySub: { color: Colors.textSecondary, fontSize: 14 },
+
+  modalOverlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
+  modalContent: { backgroundColor: Colors.surface, width: '85%', padding: 24, borderRadius: 16, borderWidth: 1, borderColor: Colors.border },
+  modalTitle: { color: Colors.white, fontSize: 20, fontWeight: 'bold', marginBottom: 8, textAlign: 'center' },
+  modalSub: { color: Colors.textSecondary, textAlign: 'center', marginBottom: 4 },
+  costInfo: { color: Colors.primary, textAlign: 'center', marginBottom: 20, fontWeight: 'bold' },
+  
+  inputContainer: { alignItems: 'center', marginBottom: 24 },
+  input: { backgroundColor: Colors.background, width: 80, height: 50, borderRadius: 8, borderWidth: 1, borderColor: Colors.border, color: Colors.white, fontSize: 24, fontWeight: 'bold', textAlign: 'center', marginBottom: 8 },
+  totalText: { color: Colors.white, fontWeight: 'bold' },
+
+  modalActions: { flexDirection: 'row', gap: 12 },
+  cancelBtn: { flex: 1, padding: 14, borderRadius: 8, backgroundColor: Colors.background, alignItems: 'center', borderWidth: 1, borderColor: Colors.border },
+  cancelText: { color: Colors.textSecondary, fontWeight: 'bold' },
+  confirmBtn: { flex: 1, padding: 14, borderRadius: 8, backgroundColor: Colors.success, alignItems: 'center' },
+  confirmText: { color: Colors.white, fontWeight: 'bold' }
+});

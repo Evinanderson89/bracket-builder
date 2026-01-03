@@ -1,4 +1,4 @@
-import React, { useEffect } from 'react';
+import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, SafeAreaView, StatusBar, ScrollView, ActivityIndicator } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useAuth } from '../context/AuthContext';
@@ -9,15 +9,8 @@ export default function HomeScreen() {
   const router = useRouter();
   const { user, mode, loading, switchToUser } = useAuth();
 
-  useEffect(() => {
-    if (!loading) {
-      if (mode === 'user' && user) {
-        router.replace('/user-dashboard');
-      } else if (mode === 'user' && !user) {
-        router.replace('/login');
-      }
-    }
-  }, [loading, mode, user, router]);
+  // REMOVED: The useEffect that auto-redirected users away from this screen.
+  // Now, 'index.js' acts as the central hub / Admin View.
 
   if (loading) {
     return (
@@ -29,10 +22,16 @@ export default function HomeScreen() {
     );
   }
 
-  // If in user mode, this screen shouldn't be shown (redirected in useEffect)
-  if (mode === 'user') {
-    return null;
-  }
+  const handlePlayerSwitch = async () => {
+    if (user) {
+      // If logged in, switch mode and go to dashboard
+      await switchToUser();
+      router.push('/user-dashboard');
+    } else {
+      // If not logged in, go to login screen
+      router.push('/login');
+    }
+  };
 
   return (
     <SafeAreaView style={styles.container}>
@@ -40,7 +39,26 @@ export default function HomeScreen() {
       <NavigationHeader title="🏆 Bracket Builder" showBack={false} />
       
       <ScrollView contentContainerStyle={styles.content}>
-        <Text style={styles.subtitle}>Bowling Tournament Management</Text>
+        
+        {/* --- PERSONA SWITCHER --- */}
+        <View style={styles.personaContainer}>
+          <View style={styles.personaTextContainer}>
+             <Text style={styles.personaLabel}>Current View</Text>
+             <Text style={styles.personaValue}>ADMINISTRATOR</Text>
+          </View>
+          <TouchableOpacity 
+            style={styles.personaButton}
+            onPress={handlePlayerSwitch}
+          >
+            <Text style={styles.personaButtonText}>
+              {user ? 'Switch to Player View 👤' : 'Player Login 👤'}
+            </Text>
+          </TouchableOpacity>
+        </View>
+
+        <View style={styles.divider} />
+        
+        <Text style={styles.subtitle}>Tournament Management</Text>
         
         <View style={styles.buttonContainer}>
           <TouchableOpacity
@@ -64,7 +82,6 @@ export default function HomeScreen() {
             <Text style={styles.buttonText}>Enter Scores</Text>
           </TouchableOpacity>
           
-          {/* REVERTED: PAYOUTS BUTTON RESTORED */}
           <TouchableOpacity
             style={styles.button}
             onPress={() => router.push('/payout')}
@@ -76,20 +93,8 @@ export default function HomeScreen() {
             style={[styles.button, styles.adminButton]}
             onPress={() => router.push('/admin')}
           >
-            <Text style={styles.buttonText}>Admin</Text>
+            <Text style={styles.buttonText}>Admin Settings</Text>
           </TouchableOpacity>
-
-          {user && (
-            <TouchableOpacity
-              style={[styles.button, styles.switchButton]}
-              onPress={async () => {
-                await switchToUser();
-                router.replace('/user-dashboard');
-              }}
-            >
-              <Text style={styles.buttonText}>👤 Switch to Player View</Text>
-            </TouchableOpacity>
-          )}
         </View>
       </ScrollView>
     </SafeAreaView>
@@ -103,14 +108,69 @@ const styles = StyleSheet.create({
   },
   content: {
     flexGrow: 1,
-    justifyContent: 'center',
     alignItems: 'center',
     padding: 20,
   },
+  
+  // Persona Switcher Styles
+  personaContainer: {
+    width: '100%',
+    maxWidth: 400,
+    backgroundColor: Colors.surface,
+    padding: 16,
+    borderRadius: 12,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    marginBottom: 20,
+  },
+  personaTextContainer: {
+    flex: 1,
+  },
+  personaLabel: {
+    color: Colors.textSecondary,
+    fontSize: 10,
+    textTransform: 'uppercase',
+    fontWeight: 'bold',
+  },
+  personaValue: {
+    color: Colors.accent,
+    fontSize: 16,
+    fontWeight: 'bold',
+    marginTop: 2,
+  },
+  personaButton: {
+    backgroundColor: Colors.surfaceSecondary,
+    paddingVertical: 10,
+    paddingHorizontal: 16,
+    borderRadius: 8,
+    borderWidth: 1,
+    borderColor: Colors.border,
+  },
+  personaButtonText: {
+    color: Colors.white,
+    fontWeight: 'bold',
+    fontSize: 12,
+  },
+
+  divider: {
+    height: 1,
+    width: '100%',
+    maxWidth: 400,
+    backgroundColor: Colors.border,
+    marginBottom: 24,
+    opacity: 0.5,
+  },
+
   subtitle: {
     fontSize: 16,
     color: Colors.textLight,
-    marginBottom: 40,
+    marginBottom: 20,
+    textTransform: 'uppercase',
+    letterSpacing: 1,
+    fontWeight: '600',
   },
   buttonContainer: {
     width: '100%',
@@ -118,14 +178,20 @@ const styles = StyleSheet.create({
   },
   button: {
     backgroundColor: Colors.primary,
-    padding: 16,
-    borderRadius: 8,
+    padding: 18,
+    borderRadius: 12,
     marginBottom: 12,
     alignItems: 'center',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.2,
+    elevation: 2,
   },
   adminButton: {
-    backgroundColor: Colors.accent,
-    marginTop: 20,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    marginTop: 12,
   },
   buttonText: {
     color: Colors.white,
@@ -137,9 +203,5 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
     backgroundColor: Colors.headerDark,
-  },
-  switchButton: {
-    backgroundColor: Colors.success,
-    marginTop: 12,
   },
 });
