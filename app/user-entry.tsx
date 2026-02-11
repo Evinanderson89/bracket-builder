@@ -28,9 +28,12 @@ export default function UserEntryScreen() {
 
   const confirmJoin = async () => {
     if (!selectedCohort || !user) return;
-    const player = users.find(u => u.name.toLowerCase() === user.name.toLowerCase());
+    const player = users.find(u =>
+      (u.email && user.email && u.email.toLowerCase() === user.email.toLowerCase()) ||
+      u.name.toLowerCase() === user.name.toLowerCase(),
+    );
     if (!player) {
-      Alert.alert('Profile Not Found', 'Create a player profile first.');
+      Alert.alert('Profile Not Found', 'Your player request must be approved before joining tournaments.');
       setModal(false); return;
     }
     const count = parseInt(bracketCount);
@@ -62,7 +65,10 @@ export default function UserEntryScreen() {
             <Text style={styles.emptySub}>Check back later!</Text>
           </View>
         ) : openCohorts.map(c => {
-          const player = users.find(u => u.name.toLowerCase() === user?.name?.toLowerCase());
+          const player = users.find(u =>
+            (u.email && user?.email && u.email.toLowerCase() === user.email.toLowerCase()) ||
+            u.name.toLowerCase() === user?.name?.toLowerCase(),
+          );
           const myCount = player ? (c.userBracketCounts?.[player.id] || 0) : 0;
           return (
             <View key={c.id} style={styles.card}>

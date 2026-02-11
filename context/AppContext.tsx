@@ -6,10 +6,11 @@ import {
   getGames, saveGames,
   getPayouts, savePayouts,
   getDeletePassword, saveDeletePassword,
+  getPlayerRequests, savePlayerRequests,
 } from '../utils/storage';
 import { createBrackets, createBracketStructure } from '../utils/bracketLogic';
 import { CohortStatus, PayoutAmounts } from '../utils/types';
-import type { Player, Cohort, Bracket, Game, Payout } from '../utils/types';
+import type { Player, Cohort, Bracket, Game, Payout, AuthUser, PlayerRequest } from '../utils/types';
 
 // ─── Context type ────────────────────────────────────────────────────────────
 
@@ -19,12 +20,16 @@ interface AppContextValue {
   brackets: Bracket[];
   games: Game[];
   payouts: Payout[];
+  playerRequests: PlayerRequest[];
   loading: boolean;
 
   addUser: (u: Omit<Player, 'id' | 'createdAt'>) => Promise<Player>;
   updateUser: (id: string, updates: Partial<Player>) => Promise<void>;
   deleteUser: (id: string) => Promise<void>;
   removeDuplicateUsers: () => Promise<number>;
+  requestPlayerAccess: (authUser: AuthUser) => Promise<PlayerRequest>;
+  approvePlayerRequest: (requestId: string) => Promise<void>;
+  rejectPlayerRequest: (requestId: string) => Promise<void>;
 
   addCohort: (c: Pick<Cohort, 'name' | 'type'>) => Promise<Cohort>;
   updateCohort: (id: string, updates: Partial<Cohort>) => Promise<void>;
@@ -61,16 +66,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const [brackets, setBrackets] = useState<Bracket[]>([]);
   const [games, setGames] = useState<Game[]>([]);
   const [payouts, setPayouts] = useState<Payout[]>([]);
+  const [playerRequests, setPlayerRequests] = useState<PlayerRequest[]>([]);
   const [deletePassword, setDeletePassword] = useState('');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     (async () => {
       try {
-        const [u, c, b, g, p, pw] = await Promise.all([
-          getUsers(), getCohorts(), getBrackets(), getGames(), getPayouts(), getDeletePassword(),
+        const [u, c, b, g, p, pw, reqs] = await Promise.all([
+          getUsers(), getCohorts(), getBrackets(), getGames(), getPayouts(), getDeletePassword(), getPlayerRequests(),
         ]);
-        setUsers(u); setCohorts(c); setBrackets(b); setGames(g); setPayouts(p); setDeletePassword(pw);
+        setUsers(u); setCohorts(c); setBrackets(b); setGames(g); setPayouts(p); setDeletePassword(pw); setPlayerRequests(reqs);
       } catch (e) {
         console.error('Failed to load data:', e);
       } finally {
@@ -118,6 +124,85 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (removed > 0) { setUsers(unique); await saveUsers(unique); }
     return removed;
   }, [users]);
+
+  const requestPlayerAccess = useCallback(async (authUser: AuthUser): Promise<PlayerRequest> => {
+    if (!authUser.emailVerified) {
+      throw new Error('Please verify your email with Google before requesting access.');
+    }
+
+    const emailLower = authUser.email.trim().toLowerCase();
+    const nameLower = authUser.name.trim().toLowerCase();
+    const existingPlayer = users.find(u =>
+      (u.email && u.email.trim().toLowerCase() === emailLower) || u.name.trim().toLowerCase() === nameLower,
+    );
+    if (existingPlayer) {
+      throw new Error('You already have a player profile.');
+    }
+
+    const existingPending = playerRequests.find(r => r.email.trim().toLowerCase() === emailLower && r.status === 'pending');
+    if (existingPending) return existingPending;
+
+    const nextReq: PlayerRequest = {
+      id: `req_${Date.now()}`,
+      email: authUser.email.trim(),
+      name: authUser.name.trim(),
+      status: 'pending',
+      requestedAt: new Date().toISOString(),
+    };
+    const next = [nextReq, ...playerRequests];
+    setPlayerRequests(next);
+    await savePlayerRequests(next);
+    return nextReq;
+  }, [playerRequests, users]);
+
+  const approvePlayerRequest = useCallback(async (requestId: string) => {
+    const request = playerRequests.find(r => r.id === requestId);
+    if (!request || request.status !== 'pending') {
+      throw new Error('Request not found or already resolved.');
+    }
+
+    const emailLower = request.email.trim().toLowerCase();
+    const nameLower = request.name.trim().toLowerCase();
+    const existingPlayer = users.find(u =>
+      (u.email && u.email.trim().toLowerCase() === emailLower) || u.name.trim().toLowerCase() === nameLower,
+    );
+
+    let nextUsers = users;
+    if (!existingPlayer) {
+      const newUser: Player = {
+        id: Date.now().toString(),
+        name: request.name,
+        email: request.email,
+        average: 200,
+        handicap: 0,
+        numBrackets: 1,
+        createdAt: new Date().toISOString(),
+      };
+      nextUsers = [...users, newUser];
+      setUsers(nextUsers);
+      await saveUsers(nextUsers);
+    }
+
+    const now = new Date().toISOString();
+    const nextRequests = playerRequests.map(r => (
+      r.id === requestId ? { ...r, status: 'approved' as const, resolvedAt: now } : r
+    ));
+    setPlayerRequests(nextRequests);
+    await savePlayerRequests(nextRequests);
+  }, [playerRequests, users]);
+
+  const rejectPlayerRequest = useCallback(async (requestId: string) => {
+    const request = playerRequests.find(r => r.id === requestId);
+    if (!request || request.status !== 'pending') {
+      throw new Error('Request not found or already resolved.');
+    }
+    const now = new Date().toISOString();
+    const nextRequests = playerRequests.map(r => (
+      r.id === requestId ? { ...r, status: 'rejected' as const, resolvedAt: now } : r
+    ));
+    setPlayerRequests(nextRequests);
+    await savePlayerRequests(nextRequests);
+  }, [playerRequests]);
 
   // ─── Cohorts ─────────────────────────────────────────────────────────────
 
@@ -312,8 +397,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // ─── Value ───────────────────────────────────────────────────────────────
 
   const value: AppContextValue = {
-    users, cohorts, brackets, games, payouts, loading,
-    addUser, updateUser, deleteUser, removeDuplicateUsers,
+    users, cohorts, brackets, games, payouts, playerRequests, loading,
+    addUser, updateUser, deleteUser, removeDuplicateUsers, requestPlayerAccess, approvePlayerRequest, rejectPlayerRequest,
     addCohort, updateCohort, deleteCohort, deployCohort,
     updateBracket, getCohortBrackets,
     saveGame: saveGameFn, getPlayerGames,

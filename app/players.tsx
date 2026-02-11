@@ -1,4 +1,4 @@
-import React, { useState, useMemo } from 'react';
+import React, { useState, useMemo, useCallback } from 'react';
 import {
   View, Text, TouchableOpacity, StyleSheet, ScrollView, SafeAreaView, Alert, Modal, TextInput,
 } from 'react-native';
@@ -12,7 +12,10 @@ type SortKey = 'name' | 'average' | 'payout';
 
 export default function PlayersScreen() {
   const router = useRouter();
-  const { users, addUser, updateUser, deleteUser, brackets, cohorts, payouts } = useApp();
+  const {
+    users, addUser, updateUser, deleteUser, brackets, cohorts, payouts,
+    playerRequests, approvePlayerRequest, rejectPlayerRequest,
+  } = useApp();
 
   const [selected, setSelected] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<SortKey>('name');
@@ -24,9 +27,9 @@ export default function PlayersScreen() {
   const [formAvg, setFormAvg] = useState('');
   const [formHdcp, setFormHdcp] = useState('');
 
-  const getTotalPayout = (name: string) =>
+  const getTotalPayout = useCallback((name: string) =>
     payouts.filter(p => p.playerName?.toLowerCase() === name.toLowerCase() && !p.isOperator)
-      .reduce((s, p) => s + (p.amount || 0), 0);
+      .reduce((s, p) => s + (p.amount || 0), 0), [payouts]);
 
   const isInActiveBracket = (uid: string) => {
     const active = cohorts.filter(c => c.status === 'active');
@@ -38,7 +41,13 @@ export default function PlayersScreen() {
     if (sortBy === 'name') return copy.sort((a, b) => a.name.localeCompare(b.name));
     if (sortBy === 'average') return copy.sort((a, b) => (b.average || 0) - (a.average || 0));
     return copy.sort((a, b) => getTotalPayout(b.name) - getTotalPayout(a.name));
-  }, [users, sortBy, payouts]);
+  }, [users, sortBy, getTotalPayout]);
+
+  const pendingRequests = useMemo(() => {
+    return playerRequests
+      .filter(r => r.status === 'pending')
+      .sort((a, b) => new Date(b.requestedAt).getTime() - new Date(a.requestedAt).getTime());
+  }, [playerRequests]);
 
   const openAdd = () => { setFormName(''); setFormAvg(''); setFormHdcp(''); setShowForm('add'); };
   const openEdit = (u: Player) => {
@@ -78,6 +87,24 @@ export default function PlayersScreen() {
       Alert.alert('Error', e.message);
     }
     setDeleteTarget(null);
+  };
+
+  const handleApproveRequest = async (requestId: string) => {
+    try {
+      await approvePlayerRequest(requestId);
+      Alert.alert('Approved', 'Player was added and request marked approved.');
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to approve request');
+    }
+  };
+
+  const handleRejectRequest = async (requestId: string) => {
+    try {
+      await rejectPlayerRequest(requestId);
+      Alert.alert('Rejected', 'Request has been rejected.');
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Failed to reject request');
+    }
   };
 
   const selectedUser = users.find(u => u.id === selected);
@@ -147,6 +174,33 @@ export default function PlayersScreen() {
           </View>
 
           <ScrollView style={styles.list}>
+            {pendingRequests.length > 0 && (
+              <View style={styles.requestSection}>
+                <Text style={styles.requestTitle}>Pending Requests ({pendingRequests.length})</Text>
+                {pendingRequests.map(req => (
+                  <View key={req.id} style={styles.requestCard}>
+                    <View style={styles.requestInfo}>
+                      <Text style={styles.requestName}>{req.name}</Text>
+                      <Text style={styles.requestEmail}>{req.email}</Text>
+                    </View>
+                    <View style={styles.requestActions}>
+                      <TouchableOpacity
+                        style={[styles.requestBtn, styles.requestApprove]}
+                        onPress={() => handleApproveRequest(req.id)}
+                      >
+                        <Text style={styles.requestBtnText}>Approve</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.requestBtn, styles.requestReject]}
+                        onPress={() => handleRejectRequest(req.id)}
+                      >
+                        <Text style={styles.requestBtnText}>Reject</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ))}
+              </View>
+            )}
             {sorted.length === 0 ? (
               <Text style={styles.emptyText}>No players yet</Text>
             ) : sorted.map(u => {
@@ -256,6 +310,23 @@ const styles = StyleSheet.create({
   sortChipText: { fontSize: 12, fontWeight: '600', color: Colors.textPrimary },
   sortChipTextActive: { color: Colors.white },
   list: { flex: 1 },
+  requestSection: {
+    margin: 12, padding: 12, borderRadius: 10, borderWidth: 1,
+    borderColor: Colors.warning, backgroundColor: 'rgba(245,158,11,0.08)',
+  },
+  requestTitle: { color: Colors.warning, fontWeight: 'bold', marginBottom: 10 },
+  requestCard: {
+    padding: 10, borderRadius: 8, borderWidth: 1, borderColor: Colors.border,
+    backgroundColor: Colors.surface, marginBottom: 8,
+  },
+  requestInfo: { marginBottom: 8 },
+  requestName: { color: Colors.white, fontWeight: '600', fontSize: 14 },
+  requestEmail: { color: Colors.textSecondary, fontSize: 12 },
+  requestActions: { flexDirection: 'row', gap: 8 },
+  requestBtn: { flex: 1, paddingVertical: 8, borderRadius: 6, alignItems: 'center' },
+  requestApprove: { backgroundColor: Colors.success },
+  requestReject: { backgroundColor: Colors.danger },
+  requestBtnText: { color: Colors.white, fontWeight: '600', fontSize: 12 },
   listItem: { padding: 16, borderBottomWidth: 1, borderBottomColor: Colors.border },
   listItemActive: { backgroundColor: Colors.primary },
   listItemName: { fontSize: 16, fontWeight: '600', color: Colors.textPrimary, marginBottom: 4 },

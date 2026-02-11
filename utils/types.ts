@@ -95,5 +95,16 @@ export interface AuthUser {
   name: string;
   picture: string | null;
   accessToken: string | null;
+  provider: 'google' | 'dev';
+  emailVerified: boolean;
   isDev: boolean;
+}
+
+export interface PlayerRequest {
+  id: string;
+  email: string;
+  name: string;
+  status: 'pending' | 'approved' | 'rejected';
+  requestedAt: string;
+  resolvedAt?: string;
 }

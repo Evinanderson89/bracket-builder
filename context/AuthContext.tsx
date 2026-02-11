@@ -6,7 +6,16 @@ interface AuthContextValue {
   user: AuthUser | null;
   mode: 'admin' | 'user';
   loading: boolean;
-  signIn: (email?: string, name?: string) => Promise<AuthUser>;
+  signIn: (payload: {
+    id: string;
+    email: string;
+    name: string;
+    picture?: string | null;
+    accessToken?: string | null;
+    provider: 'google' | 'dev';
+    emailVerified: boolean;
+  }) => Promise<AuthUser>;
+  signInDev: (email?: string, name?: string) => Promise<AuthUser>;
   signOut: () => Promise<void>;
   switchToAdmin: () => Promise<void>;
   switchToUser: () => Promise<void>;
@@ -29,7 +38,13 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     (async () => {
       try {
         const [savedUser, savedMode] = await Promise.all([getAuthUser(), getUserMode()]);
-        if (savedUser) setUser(savedUser);
+        if (savedUser) {
+          setUser({
+            ...savedUser,
+            provider: savedUser.provider || (savedUser.isDev ? 'dev' : 'google'),
+            emailVerified: typeof savedUser.emailVerified === 'boolean' ? savedUser.emailVerified : true,
+          });
+        }
         setMode((savedMode as 'admin' | 'user') || 'admin');
       } catch (e) {
         console.error('Auth load error:', e);
@@ -39,14 +54,27 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     })();
   }, []);
 
-  const signIn = useCallback(async (email?: string, name?: string): Promise<AuthUser> => {
+  const signIn = useCallback(async (payload: {
+    id: string;
+    email: string;
+    name: string;
+    picture?: string | null;
+    accessToken?: string | null;
+    provider: 'google' | 'dev';
+    emailVerified: boolean;
+  }): Promise<AuthUser> => {
+    if (!payload.emailVerified) {
+      throw new Error('Please verify your email before signing in.');
+    }
     const authUser: AuthUser = {
-      id: `dev_${Date.now()}`,
-      email: email || 'user@example.com',
-      name: name || 'Test User',
-      picture: null,
-      accessToken: null,
-      isDev: true,
+      id: payload.id,
+      email: payload.email,
+      name: payload.name,
+      picture: payload.picture || null,
+      accessToken: payload.accessToken || null,
+      provider: payload.provider,
+      emailVerified: payload.emailVerified,
+      isDev: payload.provider === 'dev',
     };
     setUser(authUser);
     await saveAuthUser(authUser);
@@ -54,6 +82,18 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
     await saveUserMode('user');
     return authUser;
   }, []);
+
+  const signInDev = useCallback(async (email?: string, name?: string): Promise<AuthUser> => {
+    return signIn({
+      id: `dev_${Date.now()}`,
+      email: email || 'user@example.com',
+      name: name || 'Test User',
+      provider: 'dev',
+      emailVerified: true,
+      picture: null,
+      accessToken: null,
+    });
+  }, [signIn]);
 
   const signOut = useCallback(async () => {
     setUser(null);
@@ -73,7 +113,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   }, []);
 
   return (
-    <AuthContext.Provider value={{ user, mode, loading, signIn, signOut, switchToAdmin, switchToUser }}>
+    <AuthContext.Provider value={{ user, mode, loading, signIn, signInDev, signOut, switchToAdmin, switchToUser }}>
       {children}
     </AuthContext.Provider>
   );

@@ -9,7 +9,7 @@ import NavigationHeader from '../components/NavigationHeader';
 export default function UserProfileScreen() {
   const router = useRouter();
   const { user } = useAuth();
-  const { users, addUser, updateUser } = useApp();
+  const { users, updateUser } = useApp();
 
   const [name, setName] = useState('');
   const [average, setAverage] = useState('');
@@ -39,19 +39,15 @@ export default function UserProfileScreen() {
     if (!name.trim() || !average || !handicap) {
       Alert.alert('Error', 'Please fill in all fields'); return;
     }
+    if (!isEditing || !profileId) {
+      Alert.alert('Request Required', 'Ask admin to approve your player request before creating a profile.');
+      return;
+    }
     try {
-      if (isEditing && profileId) {
-        await updateUser(profileId, {
-          name: name.trim(), average: parseInt(average), handicap: parseInt(handicap), email: user?.email,
-        });
-        Alert.alert('Success', 'Profile updated');
-      } else {
-        await addUser({
-          name: name.trim(), average: parseInt(average), handicap: parseInt(handicap),
-          email: user?.email, numBrackets: 1,
-        } as any);
-        Alert.alert('Success', 'Profile created');
-      }
+      await updateUser(profileId, {
+        name: name.trim(), average: parseInt(average), handicap: parseInt(handicap), email: user?.email,
+      });
+      Alert.alert('Success', 'Profile updated');
       router.back();
     } catch (e: any) {
       Alert.alert('Error', e.message || 'Save failed');
@@ -60,9 +56,14 @@ export default function UserProfileScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <NavigationHeader title={isEditing ? 'Edit Profile' : 'Create Profile'} />
+      <NavigationHeader title="My Profile" />
       <ScrollView style={styles.scroll}>
         <View style={styles.form}>
+          {!isEditing && (
+            <View style={styles.notice}>
+              <Text style={styles.noticeText}>Your player request must be approved before a profile can be edited.</Text>
+            </View>
+          )}
           <Text style={styles.label}>Name</Text>
           <TextInput style={styles.input} value={name} onChangeText={setName}
             placeholder="Your name" placeholderTextColor={Colors.textLight} />
@@ -76,7 +77,7 @@ export default function UserProfileScreen() {
             placeholder="Your handicap" keyboardType="numeric" placeholderTextColor={Colors.textLight} />
 
           <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
-            <Text style={styles.saveBtnText}>{isEditing ? 'Update Profile' : 'Create Profile'}</Text>
+            <Text style={styles.saveBtnText}>Update Profile</Text>
           </TouchableOpacity>
         </View>
       </ScrollView>
@@ -88,6 +89,11 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   scroll: { flex: 1 },
   form: { padding: 16 },
+  notice: {
+    backgroundColor: 'rgba(245,158,11,0.1)', borderWidth: 1, borderColor: Colors.warning,
+    borderRadius: 8, padding: 12, marginBottom: 8,
+  },
+  noticeText: { color: Colors.warning, fontSize: 12, lineHeight: 18 },
   label: { fontSize: 14, fontWeight: '600', color: Colors.white, marginBottom: 8, marginTop: 16 },
   input: {
     backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border,

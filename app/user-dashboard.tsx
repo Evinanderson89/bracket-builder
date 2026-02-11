@@ -10,21 +10,31 @@ import type { Player } from '../utils/types';
 export default function UserDashboard() {
   const router = useRouter();
   const { user, signOut, switchToAdmin } = useAuth();
-  const { users, addUser } = useApp();
+  const { users, playerRequests, requestPlayerAccess } = useApp();
   const [playerRecord, setPlayerRecord] = useState<Player | null>(null);
 
   useEffect(() => {
     if (user && users.length > 0) {
-      const found = users.find(u => u.name.toLowerCase() === user.name.toLowerCase());
+      const found = users.find(u =>
+        (u.email && user.email && u.email.toLowerCase() === user.email.toLowerCase()) ||
+        u.name.toLowerCase() === user.name.toLowerCase(),
+      );
       setPlayerRecord(found ?? null);
     }
   }, [user, users]);
 
-  const handleCreateProfile = async () => {
+  const pendingRequest = user
+    ? playerRequests.find(r => r.email.toLowerCase() === user.email.toLowerCase() && r.status === 'pending')
+    : null;
+  const rejectedRequest = user
+    ? playerRequests.find(r => r.email.toLowerCase() === user.email.toLowerCase() && r.status === 'rejected')
+    : null;
+
+  const handleRequestAccess = async () => {
     if (!user) return;
     try {
-      await addUser({ name: user.name, average: 200, handicap: 0, numBrackets: 1, email: user.email } as any);
-      Alert.alert('Success', 'Player profile created!');
+      await requestPlayerAccess(user);
+      Alert.alert('Request Sent', 'Your request has been sent to the admin for approval.');
     } catch (e: any) {
       Alert.alert('Error', e.message);
     }
@@ -49,9 +59,20 @@ export default function UserDashboard() {
           <Text style={styles.welcomeText}>Welcome,</Text>
           <Text style={styles.userName}>{user.name}</Text>
           {!playerRecord ? (
-            <TouchableOpacity style={styles.createBtn} onPress={handleCreateProfile}>
-              <Text style={styles.createBtnText}>Create Player Profile</Text>
-            </TouchableOpacity>
+            <View style={styles.requestWrap}>
+              {!pendingRequest ? (
+                <TouchableOpacity style={styles.createBtn} onPress={handleRequestAccess}>
+                  <Text style={styles.createBtnText}>Request Player Access</Text>
+                </TouchableOpacity>
+              ) : (
+                <Text style={styles.pendingText}>Request pending admin approval</Text>
+              )}
+              {rejectedRequest && (
+                <Text style={styles.rejectedText}>
+                  A prior request was rejected. You can submit again.
+                </Text>
+              )}
+            </View>
           ) : (
             <Text style={styles.playerStats}>Avg: {playerRecord.average} | Hdcp: {playerRecord.handicap}</Text>
           )}
@@ -91,8 +112,14 @@ const styles = StyleSheet.create({
     backgroundColor: 'rgba(59,130,246,0.1)', paddingHorizontal: 12, paddingVertical: 4,
     borderRadius: 12, borderWidth: 1, borderColor: 'rgba(59,130,246,0.3)',
   },
+  requestWrap: { alignItems: 'center', gap: 8 },
   createBtn: { backgroundColor: Colors.warning, paddingHorizontal: 16, paddingVertical: 8, borderRadius: 20 },
   createBtnText: { color: Colors.headerDark, fontWeight: 'bold' },
+  pendingText: {
+    color: Colors.warning, fontWeight: 'bold', fontSize: 13,
+    backgroundColor: 'rgba(245,158,11,0.15)', paddingHorizontal: 12, paddingVertical: 6, borderRadius: 10,
+  },
+  rejectedText: { color: Colors.danger, fontSize: 12, textAlign: 'center' },
   grid: { flexDirection: 'row', flexWrap: 'wrap', gap: 16, justifyContent: 'center' },
   card: {
     width: '47%', backgroundColor: Colors.surface, borderRadius: 16, padding: 20,
