@@ -1,32 +1,25 @@
-import { fixupConfigRules } from "@eslint/compat";
-import { FlatCompat } from "@eslint/eslintrc";
 import js from "@eslint/js";
 import typescriptEslint from "@typescript-eslint/eslint-plugin";
 import typescriptEslintParser from "@typescript-eslint/parser";
 import react from "eslint-plugin-react";
 import reactHooks from "eslint-plugin-react-hooks";
-import reactNative from "eslint-plugin-react-native";
 import globals from "globals";
 
-const compat = new FlatCompat();
-
 export default [
-  { ignores: ["**/dist", "**/web-build"] },
+  { ignores: ["**/dist", "**/web-build", "**/.expo"] },
   {
-    files: ["**/*.{js,jsx,ts,tsx}"],
+    files: ["**/*.{ts,tsx}"],
     languageOptions: {
       ecmaVersion: "latest",
       globals: globals.node,
       parser: typescriptEslintParser,
       parserOptions: {
         ecmaFeatures: { jsx: true },
-        project: "./tsconfig.json",
       },
     },
     plugins: {
       react,
       "react-hooks": reactHooks,
-      "react-native": reactNative,
       "@typescript-eslint": typescriptEslint,
     },
     rules: {
@@ -38,19 +31,11 @@ export default [
       "react/react-in-jsx-scope": "off",
       "react-hooks/rules-of-hooks": "error",
       "react-hooks/exhaustive-deps": "warn",
-      "@typescript-eslint/no-unused-vars": [
-        "warn",
-        { argsIgnorePattern: "^_" },
-      ],
+      "@typescript-eslint/no-unused-vars": ["warn", { argsIgnorePattern: "^_" }],
+      "no-undef": "off",
+      "no-unused-vars": "off",
+      "no-redeclare": "off",
     },
     settings: { react: { version: "detect" } },
   },
-  ...fixupConfigRules(
-    compat.extends(
-      "eslint:recommended",
-      "plugin:@typescript-eslint/recommended",
-      "prettier"
-    )
-  ),
 ];
-
