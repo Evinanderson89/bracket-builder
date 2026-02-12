@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
+import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../styles/colors';
 
 const BACK_ROUTES: Record<string, string> = {
@@ -25,6 +26,21 @@ interface Props {
   showHome?: boolean;
 }
 
+interface HeaderButtonProps {
+  icon: keyof typeof Ionicons.glyphMap;
+  label: string;
+  onPress: () => void;
+}
+
+function HeaderButton({ icon, label, onPress }: HeaderButtonProps) {
+  return (
+    <TouchableOpacity onPress={onPress} style={styles.btn} hitSlop={8} activeOpacity={0.84}>
+      <Ionicons name={icon} size={14} color={Colors.primary} />
+      <Text style={styles.btnText}>{label}</Text>
+    </TouchableOpacity>
+  );
+}
+
 export default function NavigationHeader({ title, showBack = true, showHome = true }: Props) {
   const router = useRouter();
   const pathname = usePathname();
@@ -36,23 +52,15 @@ export default function NavigationHeader({ title, showBack = true, showHome = tr
 
   return (
     <View style={styles.header}>
-      {showBack ? (
-        <TouchableOpacity onPress={handleBack} style={styles.btn} hitSlop={8}>
-          <Text style={styles.btnText}>Back</Text>
-        </TouchableOpacity>
-      ) : (
-        <View style={styles.spacer} />
-      )}
+      {showBack
+        ? <HeaderButton icon="arrow-back" label="Back" onPress={handleBack} />
+        : <View style={styles.spacer} />}
 
       <Text style={styles.title} numberOfLines={1}>{title}</Text>
 
-      {showHome ? (
-        <TouchableOpacity onPress={() => router.push('/' as any)} style={styles.btn} hitSlop={8}>
-          <Text style={styles.btnText}>Home</Text>
-        </TouchableOpacity>
-      ) : (
-        <View style={styles.spacer} />
-      )}
+      {showHome
+        ? <HeaderButton icon="home" label="Home" onPress={() => router.push('/' as any)} />
+        : <View style={styles.spacer} />}
     </View>
   );
 }
@@ -60,16 +68,46 @@ export default function NavigationHeader({ title, showBack = true, showHome = tr
 const styles = StyleSheet.create({
   header: {
     backgroundColor: Colors.headerDark,
-    paddingVertical: 16,
-    paddingHorizontal: 20,
+    paddingVertical: 14,
+    paddingHorizontal: 16,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
+    shadowColor: Colors.shadow,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.32,
+    shadowRadius: 18,
+    elevation: 7,
   },
-  btn: { paddingHorizontal: 4, minWidth: 50 },
-  btnText: { color: Colors.primary, fontSize: 15, fontWeight: '600' },
-  title: { fontSize: 20, fontWeight: 'bold', color: Colors.white, flex: 1, textAlign: 'center', marginHorizontal: 8 },
-  spacer: { minWidth: 50 },
+  btn: {
+    minWidth: 88,
+    borderRadius: 999,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+    backgroundColor: Colors.surfaceSecondary,
+    paddingHorizontal: 12,
+    paddingVertical: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  btnText: {
+    color: Colors.primary,
+    fontSize: 13,
+    fontWeight: '700',
+    letterSpacing: 0.3,
+    marginLeft: 5,
+  },
+  title: {
+    fontSize: 17,
+    fontWeight: '800',
+    color: Colors.textPrimary,
+    flex: 1,
+    textAlign: 'center',
+    marginHorizontal: 10,
+    letterSpacing: 0.35,
+  },
+  spacer: { minWidth: 88 },
 });

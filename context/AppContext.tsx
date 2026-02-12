@@ -9,7 +9,7 @@ import {
   getPlayerRequests, savePlayerRequests,
 } from '../utils/storage';
 import { createBrackets, createBracketStructure } from '../utils/bracketLogic';
-import { CohortStatus, PayoutAmounts } from '../utils/types';
+import { CohortStatus, CohortType, PayoutAmounts, TournamentKind } from '../utils/types';
 import type { Player, Cohort, Bracket, Game, Payout, AuthUser, PlayerRequest } from '../utils/types';
 
 // ─── Context type ────────────────────────────────────────────────────────────
@@ -31,7 +31,7 @@ interface AppContextValue {
   approvePlayerRequest: (requestId: string) => Promise<void>;
   rejectPlayerRequest: (requestId: string) => Promise<void>;
 
-  addCohort: (c: Pick<Cohort, 'name' | 'type'>) => Promise<Cohort>;
+  addCohort: (c: Pick<Cohort, 'name' | 'type' | 'tournamentKind' | 'totalGames' | 'bracketStartGame' | 'scoreSourceCohortId'>) => Promise<Cohort>;
   updateCohort: (id: string, updates: Partial<Cohort>) => Promise<void>;
   deleteCohort: (id: string) => Promise<void>;
   deployCohort: (id: string, selectedUsers: Player[], counts: Record<string, number>) => Promise<void>;
@@ -58,6 +58,34 @@ export function useApp(): AppContextValue {
   return ctx;
 }
 
+function normalizeCohort(raw: any): Cohort {
+  const totalGames = Math.max(3, Math.floor(Number(raw?.totalGames) || 3));
+  const maxBracketStart = Math.max(1, totalGames - 2);
+  const bracketStartGame = Math.min(
+    Math.max(1, Math.floor(Number(raw?.bracketStartGame) || 1)),
+    maxBracketStart,
+  );
+
+  const type = raw?.type === CohortType.HANDICAP ? CohortType.HANDICAP : CohortType.SCRATCH;
+  const tournamentKind = raw?.tournamentKind === TournamentKind.SERIES
+    ? TournamentKind.SERIES
+    : TournamentKind.BRACKETS;
+
+  return {
+    id: String(raw?.id ?? Date.now()),
+    name: String(raw?.name ?? 'Tournament'),
+    type,
+    tournamentKind,
+    totalGames,
+    bracketStartGame: tournamentKind === TournamentKind.BRACKETS ? bracketStartGame : 1,
+    scoreSourceCohortId: typeof raw?.scoreSourceCohortId === 'string' ? raw.scoreSourceCohortId : null,
+    status: Object.values(CohortStatus).includes(raw?.status) ? raw.status : CohortStatus.NOT_DEPLOYED,
+    selectedUserIds: Array.isArray(raw?.selectedUserIds) ? raw.selectedUserIds : [],
+    userBracketCounts: raw?.userBracketCounts && typeof raw.userBracketCounts === 'object' ? raw.userBracketCounts : {},
+    createdAt: raw?.createdAt || new Date().toISOString(),
+  };
+}
+
 // ─── Provider ────────────────────────────────────────────────────────────────
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
@@ -76,7 +104,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         const [u, c, b, g, p, pw, reqs] = await Promise.all([
           getUsers(), getCohorts(), getBrackets(), getGames(), getPayouts(), getDeletePassword(), getPlayerRequests(),
         ]);
-        setUsers(u); setCohorts(c); setBrackets(b); setGames(g); setPayouts(p); setDeletePassword(pw); setPlayerRequests(reqs);
+        const normalizedCohorts = (c || []).map(normalizeCohort);
+        setUsers(u);
+        setCohorts(normalizedCohorts);
+        setBrackets(b);
+        setGames(g);
+        setPayouts(p);
+        setDeletePassword(pw);
+        setPlayerRequests(reqs);
+
+        if (JSON.stringify(c) !== JSON.stringify(normalizedCohorts)) {
+          await saveCohorts(normalizedCohorts);
+        }
       } catch (e) {
         console.error('Failed to load data:', e);
       } finally {
@@ -206,10 +245,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   // ─── Cohorts ─────────────────────────────────────────────────────────────
 
-  const addCohort = useCallback(async (c: Pick<Cohort, 'name' | 'type'>): Promise<Cohort> => {
+  const addCohort = useCallback(async (
+    c: Pick<Cohort, 'name' | 'type' | 'tournamentKind' | 'totalGames' | 'bracketStartGame' | 'scoreSourceCohortId'>,
+  ): Promise<Cohort> => {
+    const totalGames = Math.max(3, Math.floor(c.totalGames || 3));
+    const maxBracketStart = Math.max(1, totalGames - 2);
+    const bracketStartGame = Math.min(Math.max(1, Math.floor(c.bracketStartGame || 1)), maxBracketStart);
+
     const cohort: Cohort = {
-      ...c,
       id: Date.now().toString(),
+      name: c.name,
+      type: c.type,
+      tournamentKind: c.tournamentKind,
+      totalGames,
+      bracketStartGame: c.tournamentKind === TournamentKind.BRACKETS ? bracketStartGame : 1,
+      scoreSourceCohortId: c.scoreSourceCohortId || null,
       createdAt: new Date().toISOString(),
       status: CohortStatus.NOT_DEPLOYED,
       selectedUserIds: [],
@@ -246,7 +296,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     selectedUsers: Player[],
     counts: Record<string, number>,
   ) => {
+    const cohort = cohorts.find(c => c.id === cohortId);
+    if (!cohort) throw new Error('Tournament not found');
+
     if (!selectedUsers.length) throw new Error('No users selected for deployment');
+
+    if (cohort.tournamentKind === TournamentKind.SERIES) {
+      const nextCohorts = cohorts.map(c =>
+        c.id === cohortId
+          ? {
+              ...c,
+              status: CohortStatus.ACTIVE as typeof CohortStatus.ACTIVE,
+              selectedUserIds: selectedUsers.map(u => u.id),
+              userBracketCounts: counts,
+            }
+          : c,
+      );
+      setCohorts(nextCohorts);
+      await saveCohorts(nextCohorts);
+      return;
+    }
 
     // Expand users by their bracket counts
     const expanded: (Player & { bracketInstance: number })[] = [];
@@ -287,6 +356,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const createPayoutsForBracket = useCallback(async (bracket: Bracket, allBrackets: Bracket[]) => {
     const cohort = cohorts.find(c => c.id === bracket.cohortId);
     if (!cohort) return;
+    if (cohort.tournamentKind !== TournamentKind.BRACKETS) return;
 
     // Skip if payouts already exist for this bracket
     if (payouts.some(p => p.bracketId === bracket.id)) return;

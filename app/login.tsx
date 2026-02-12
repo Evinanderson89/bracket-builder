@@ -1,5 +1,18 @@
 import React, { useEffect, useMemo, useState } from 'react';
-import { View, Text, TextInput, TouchableOpacity, StyleSheet, SafeAreaView, Alert, ActivityIndicator, Platform } from 'react-native';
+import {
+  View,
+  Text,
+  TextInput,
+  TouchableOpacity,
+  StyleSheet,
+  SafeAreaView,
+  Alert,
+  ActivityIndicator,
+  Platform,
+  StatusBar,
+  ScrollView,
+} from 'react-native';
+import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
@@ -87,16 +100,32 @@ export default function LoginScreen() {
 
   return (
     <SafeAreaView style={styles.container}>
-      <View style={styles.content}>
-        <Text style={styles.title}>Bracket Builder</Text>
-        <Text style={styles.subtitle}>Sign in with Google to access your brackets</Text>
+      <StatusBar barStyle="light-content" backgroundColor={Colors.headerDark} />
+      <View style={styles.bgOrbPrimary} />
+      <View style={styles.bgOrbAccent} />
+
+      <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
+        <View style={styles.heroCard}>
+          <Text style={styles.eyebrow}>BRACKET BUILDER</Text>
+          <Text style={styles.title}>Tournament play with a clean, focused interface.</Text>
+          <Text style={styles.subtitle}>
+            Sign in to enter tournaments, track bracket progress, and view your running stats.
+          </Text>
+        </View>
 
         <View style={styles.form}>
+          <View style={styles.formHeader}>
+            <Ionicons name="shield-checkmark" size={17} color={Colors.success} />
+            <Text style={styles.formHeaderText}>Secure sign in</Text>
+          </View>
+
           <TouchableOpacity
             style={[styles.button, styles.googleButton, (!request || !canUseGoogle) && styles.disabled]}
             onPress={() => promptAsync()}
             disabled={!request || !canUseGoogle}
+            activeOpacity={0.85}
           >
+            <Ionicons name="logo-google" size={18} color={Colors.white} style={{ marginRight: 8 }} />
             <Text style={styles.buttonText}>Continue with Google</Text>
           </TouchableOpacity>
 
@@ -116,21 +145,31 @@ export default function LoginScreen() {
                 <>
                   <Text style={styles.label}>Email</Text>
                   <TextInput
-                    style={styles.input} value={email} onChangeText={setEmail}
-                    placeholder="your.email@gmail.com" placeholderTextColor={Colors.textLight}
-                    keyboardType="email-address" autoCapitalize="none" editable={!devLoading}
+                    style={styles.input}
+                    value={email}
+                    onChangeText={setEmail}
+                    placeholder="your.email@gmail.com"
+                    placeholderTextColor={Colors.textLight}
+                    keyboardType="email-address"
+                    autoCapitalize="none"
+                    editable={!devLoading}
                   />
 
                   <Text style={styles.label}>Name</Text>
                   <TextInput
-                    style={styles.input} value={name} onChangeText={setName}
-                    placeholder="Your Name" placeholderTextColor={Colors.textLight}
+                    style={styles.input}
+                    value={name}
+                    onChangeText={setName}
+                    placeholder="Your Name"
+                    placeholderTextColor={Colors.textLight}
                     editable={!devLoading}
                   />
 
                   <TouchableOpacity
                     style={[styles.button, devLoading && styles.disabled]}
-                    onPress={handleDevSignIn} disabled={devLoading}
+                    onPress={handleDevSignIn}
+                    disabled={devLoading}
+                    activeOpacity={0.85}
                   >
                     {devLoading
                       ? <ActivityIndicator color={Colors.white} />
@@ -144,46 +183,132 @@ export default function LoginScreen() {
           <TouchableOpacity
             style={[styles.button, styles.adminButton]}
             onPress={async () => { await switchToAdmin(); router.replace('/' as any); }}
+            activeOpacity={0.85}
           >
+            <Ionicons name="settings" size={16} color={Colors.white} style={{ marginRight: 7 }} />
             <Text style={styles.buttonText}>Admin Access</Text>
           </TouchableOpacity>
 
           {user && (
             <TouchableOpacity
-              style={[styles.button, { backgroundColor: Colors.success, marginTop: 12 }]}
+              style={[styles.button, styles.switchButton]}
               onPress={async () => { await switchToAdmin(); router.replace('/' as any); }}
+              activeOpacity={0.85}
             >
               <Text style={styles.buttonText}>Switch to Admin View</Text>
             </TouchableOpacity>
           )}
         </View>
-      </View>
+      </ScrollView>
     </SafeAreaView>
   );
 }
 
 const styles = StyleSheet.create({
-  container: { flex: 1, backgroundColor: Colors.headerDark },
-  content: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 24 },
-  title: { fontSize: 32, fontWeight: 'bold', color: Colors.white, marginBottom: 8 },
-  subtitle: { fontSize: 16, color: Colors.textLight, marginBottom: 40 },
-  form: { width: '100%', maxWidth: 400 },
-  label: { fontSize: 14, fontWeight: '600', color: Colors.white, marginBottom: 8, marginTop: 16 },
+  container: { flex: 1, backgroundColor: Colors.background },
+  bgOrbPrimary: {
+    position: 'absolute',
+    top: 10,
+    right: -90,
+    width: 260,
+    height: 260,
+    borderRadius: 260,
+    backgroundColor: Colors.glowPrimary,
+  },
+  bgOrbAccent: {
+    position: 'absolute',
+    bottom: -30,
+    left: -100,
+    width: 260,
+    height: 260,
+    borderRadius: 260,
+    backgroundColor: Colors.glowAccent,
+  },
+  content: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    alignItems: 'center',
+    padding: 20,
+    paddingBottom: 26,
+  },
+  heroCard: {
+    width: '100%',
+    maxWidth: 640,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+    marginBottom: 14,
+    shadowColor: Colors.shadow,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.34,
+    shadowRadius: 16,
+    elevation: 8,
+    padding: 18,
+  },
+  eyebrow: { color: Colors.primary, fontSize: 12, fontWeight: '800', letterSpacing: 1.2, marginBottom: 7 },
+  title: { color: Colors.white, fontSize: 26, lineHeight: 31, fontWeight: '800' },
+  subtitle: { color: Colors.textSecondary, fontSize: 13, lineHeight: 18, marginTop: 6 },
+  form: {
+    width: '100%',
+    maxWidth: 640,
+    backgroundColor: Colors.surface,
+    borderRadius: 20,
+    padding: 18,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    shadowColor: Colors.shadow,
+    shadowOffset: { width: 0, height: 12 },
+    shadowOpacity: 0.28,
+    shadowRadius: 14,
+    elevation: 6,
+  },
+  formHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 12,
+    paddingBottom: 10,
+    borderBottomColor: Colors.border,
+    borderBottomWidth: 1,
+  },
+  formHeaderText: { color: Colors.textPrimary, fontWeight: '700', fontSize: 14, marginLeft: 7 },
+  label: {
+    fontSize: 12,
+    fontWeight: '700',
+    color: Colors.textSecondary,
+    marginBottom: 8,
+    marginTop: 16,
+    letterSpacing: 0.5,
+  },
   helperText: { fontSize: 12, color: Colors.textSecondary, marginTop: 8, lineHeight: 18 },
   input: {
-    backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border,
-    borderRadius: 8, padding: 12, color: Colors.white, fontSize: 16,
+    backgroundColor: Colors.tabBar,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 12,
+    padding: 12,
+    color: Colors.white,
+    fontSize: 16,
   },
   button: {
-    backgroundColor: Colors.primary, padding: 16, borderRadius: 8, alignItems: 'center', marginTop: 24,
+    backgroundColor: Colors.primaryDark,
+    padding: 14,
+    borderRadius: 12,
+    alignItems: 'center',
+    marginTop: 12,
+    borderWidth: 1,
+    borderColor: Colors.borderLight,
+    flexDirection: 'row',
+    justifyContent: 'center',
   },
   googleButton: {
     backgroundColor: Platform.OS === 'web' ? '#0f62fe' : '#1f6feb',
     marginTop: 0,
   },
   adminButton: { backgroundColor: Colors.accent },
+  switchButton: { backgroundColor: Colors.success, marginTop: 10 },
   devWrap: {
-    marginTop: 18,
+    marginTop: 16,
     paddingTop: 12,
     borderTopColor: Colors.border,
     borderTopWidth: 1,
@@ -196,7 +321,8 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     fontSize: 12,
     textDecorationLine: 'underline',
+    fontWeight: '600',
   },
   disabled: { opacity: 0.6 },
-  buttonText: { color: Colors.white, fontSize: 16, fontWeight: '600' },
+  buttonText: { color: Colors.white, fontSize: 15, fontWeight: '700', letterSpacing: 0.2 },
 });

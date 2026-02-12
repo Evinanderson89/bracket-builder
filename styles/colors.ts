@@ -1,33 +1,35 @@
 export const Colors = {
   // Brand
-  primary: '#3b82f6',
-  primaryDark: '#1d4ed8',
-  accent: '#f59e0b',
+  primary: '#22d3ee',
+  primaryDark: '#0891b2',
+  accent: '#f97316',
+  glowPrimary: 'rgba(34,211,238,0.28)',
+  glowAccent: 'rgba(249,115,22,0.24)',
 
   // App Shell
-  background: '#0f172a',
-  surface: '#1e293b',
-  surfaceSecondary: '#334155',
-  tabBar: '#1e293b',
+  background: '#050b14',
+  surface: '#101a2b',
+  surfaceSecondary: '#18253b',
+  tabBar: '#0d1727',
 
   // Text
-  textPrimary: '#f8fafc',
-  textSecondary: '#94a3b8',
-  textLight: '#64748b',
+  textPrimary: '#eaf2ff',
+  textSecondary: '#9cb0cc',
+  textLight: '#6f86a8',
   white: '#ffffff',
 
   // Functional
-  border: '#334155',
-  borderLight: '#475569',
-  success: '#10b981',
-  danger: '#ef4444',
+  border: '#24364f',
+  borderLight: '#355175',
+  success: '#22c55e',
+  danger: '#fb7185',
   warning: '#f59e0b',
-  info: '#0ea5e9',
-  shadow: '#000000',
+  info: '#38bdf8',
+  shadow: '#020617',
 
   // Overlays
-  headerDark: '#020617',
-  overlay: 'rgba(0,0,0,0.7)',
+  headerDark: '#070f1d',
+  overlay: 'rgba(2, 6, 23, 0.78)',
   winnerGold: '#FFD700',
-  bracketLine: '#475569',
+  bracketLine: '#3a4d69',
 } as const;

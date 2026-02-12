@@ -1,4 +1,5 @@
-import type { Player, Match, BracketStructure, Bracket } from './types';
+import { TournamentKind } from './types';
+import type { Player, Match, BracketStructure, Bracket, Cohort } from './types';
 
 // ─── Utilities ───────────────────────────────────────────────────────────────
 
@@ -117,6 +118,29 @@ export function calculateTotalScore(score: number, handicap: number, useHandicap
   return useHandicap ? score + (handicap || 0) : score;
 }
 
+export function getBracketGameWindow(cohort: Pick<Cohort, 'totalGames' | 'bracketStartGame' | 'tournamentKind'>): {
+  startGame: number;
+  endGame: number;
+} {
+  const totalGames = Math.max(3, Math.floor(cohort.totalGames || 3));
+  const maxStart = Math.max(1, totalGames - 2);
+  const startGame = Math.min(Math.max(1, Math.floor(cohort.bracketStartGame || 1)), maxStart);
+
+  if (cohort.tournamentKind === TournamentKind.SERIES) {
+    return { startGame: 1, endGame: totalGames };
+  }
+
+  return { startGame, endGame: Math.min(totalGames, startGame + 2) };
+}
+
+export function getRoundGameNumber(
+  cohort: Pick<Cohort, 'totalGames' | 'bracketStartGame' | 'tournamentKind'>,
+  roundIndex: number,
+): number {
+  const { startGame } = getBracketGameWindow(cohort);
+  return startGame + roundIndex;
+}
+
 // ─── Bracket advancement ─────────────────────────────────────────────────────
 
 /**
@@ -196,16 +220,19 @@ export function isScoreRelevant(
   playerId: string,
   gameNumber: number,
   brackets: Bracket[],
+  startGame = 1,
+  endGame = 3,
 ): boolean {
-  if (gameNumber === 1) return true;
+  if (gameNumber < startGame || gameNumber > endGame) return false;
+  if (gameNumber === startGame) return true;
 
   const relevant = brackets.filter(b => b.players.some(p => p.id === playerId));
   if (relevant.length === 0) return false;
 
   return relevant.some(b => {
     const { rounds } = b.structure;
-    // Check rounds before `gameNumber` for an elimination
-    for (let r = 0; r < gameNumber - 1; r++) {
+    // Check rounds before this counted game for an elimination
+    for (let r = 0; r < gameNumber - startGame; r++) {
       const round = rounds[r];
       if (!round) continue;
       const match = round.find(

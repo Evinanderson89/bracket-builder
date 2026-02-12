@@ -15,6 +15,13 @@ export const CohortType = {
 
 export type CohortTypeValue = (typeof CohortType)[keyof typeof CohortType];
 
+export const TournamentKind = {
+  SERIES: 'Series',
+  BRACKETS: 'Brackets',
+} as const;
+
+export type TournamentKindValue = (typeof TournamentKind)[keyof typeof TournamentKind];
+
 export const PayoutAmounts = {
   FIRST_PLACE: 25,
   SECOND_PLACE: 10,
@@ -61,6 +68,10 @@ export interface Cohort {
   id: string;
   name: string;
   type: CohortTypeValue;
+  tournamentKind: TournamentKindValue;
+  totalGames: number;
+  bracketStartGame: number; // for bracket tournaments, first counted game in 3-game window
+  scoreSourceCohortId: string | null; // if set, scores are read from this cohort
   status: CohortStatusValue;
   selectedUserIds: string[];
   userBracketCounts: Record<string, number>;
