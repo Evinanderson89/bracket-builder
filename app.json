@@ -1,6 +1,6 @@
 {
   "expo": {
-    "name": "bracket-builder",
+    "name": "Bracket Builder",
     "slug": "bracket-builder",
     "version": "1.0.0",
     "orientation": "portrait",
@@ -9,9 +9,13 @@
     "userInterfaceStyle": "automatic",
     "newArchEnabled": true,
     "ios": {
-      "supportsTablet": true
+      "supportsTablet": true,
+      "bundleIdentifier": "com.bracketbuilder.app",
+      "buildNumber": "1"
     },
     "android": {
+      "package": "com.bracketbuilder.app",
+      "versionCode": 1,
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
