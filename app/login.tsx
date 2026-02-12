@@ -14,6 +14,7 @@ export default function LoginScreen() {
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [devLoading, setDevLoading] = useState(false);
+  const [showDevForm, setShowDevForm] = useState(false);
 
   const googleConfig = useMemo(() => ({
     expoClientId: process.env.EXPO_PUBLIC_GOOGLE_EXPO_CLIENT_ID,
@@ -23,8 +24,6 @@ export default function LoginScreen() {
   }), []);
 
   const [request, response, promptAsync] = Google.useAuthRequest({
-    // The hook requires platform client IDs to be defined at init time.
-    // We provide safe placeholders to avoid hard crashes and gate usage with `canUseGoogle`.
     expoClientId: googleConfig.expoClientId || '__missing_expo_client_id__',
     iosClientId: googleConfig.iosClientId || '__missing_ios_client_id__',
     androidClientId: googleConfig.androidClientId || '__missing_android_client_id__',
@@ -103,41 +102,47 @@ export default function LoginScreen() {
 
           {!canUseGoogle && (
             <Text style={styles.helperText}>
-              Add the Google OAuth client ID for this platform (`EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` on web) to enable Gmail login.
+              Google sign-in is not configured yet. Set `EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID` and restart the app.
             </Text>
           )}
 
-          <View style={styles.divider}>
-            <View style={styles.dividerLine} />
-            <Text style={styles.dividerText}>DEV ONLY</Text>
-            <View style={styles.dividerLine} />
-          </View>
+          {__DEV__ && (
+            <View style={styles.devWrap}>
+              <TouchableOpacity style={styles.devToggle} onPress={() => setShowDevForm(v => !v)}>
+                <Text style={styles.devToggleText}>{showDevForm ? 'Hide' : 'Show'} Developer Options</Text>
+              </TouchableOpacity>
 
-          <Text style={styles.label}>Email</Text>
-          <TextInput
-            style={styles.input} value={email} onChangeText={setEmail}
-            placeholder="your.email@gmail.com" placeholderTextColor={Colors.textLight}
-            keyboardType="email-address" autoCapitalize="none" editable={!devLoading}
-          />
+              {showDevForm && (
+                <>
+                  <Text style={styles.label}>Email</Text>
+                  <TextInput
+                    style={styles.input} value={email} onChangeText={setEmail}
+                    placeholder="your.email@gmail.com" placeholderTextColor={Colors.textLight}
+                    keyboardType="email-address" autoCapitalize="none" editable={!devLoading}
+                  />
 
-          <Text style={styles.label}>Name</Text>
-          <TextInput
-            style={styles.input} value={name} onChangeText={setName}
-            placeholder="Your Name" placeholderTextColor={Colors.textLight}
-            editable={!devLoading}
-          />
+                  <Text style={styles.label}>Name</Text>
+                  <TextInput
+                    style={styles.input} value={name} onChangeText={setName}
+                    placeholder="Your Name" placeholderTextColor={Colors.textLight}
+                    editable={!devLoading}
+                  />
+
+                  <TouchableOpacity
+                    style={[styles.button, devLoading && styles.disabled]}
+                    onPress={handleDevSignIn} disabled={devLoading}
+                  >
+                    {devLoading
+                      ? <ActivityIndicator color={Colors.white} />
+                      : <Text style={styles.buttonText}>Sign In (Dev)</Text>}
+                  </TouchableOpacity>
+                </>
+              )}
+            </View>
+          )}
 
           <TouchableOpacity
-            style={[styles.button, devLoading && styles.disabled]}
-            onPress={handleDevSignIn} disabled={devLoading}
-          >
-            {devLoading
-              ? <ActivityIndicator color={Colors.white} />
-              : <Text style={styles.buttonText}>Sign In (Dev)</Text>}
-          </TouchableOpacity>
-
-          <TouchableOpacity
-            style={[styles.button, { backgroundColor: Colors.accent }]}
+            style={[styles.button, styles.adminButton]}
             onPress={async () => { await switchToAdmin(); router.replace('/' as any); }}
           >
             <Text style={styles.buttonText}>Admin Access</Text>
@@ -176,9 +181,22 @@ const styles = StyleSheet.create({
     backgroundColor: Platform.OS === 'web' ? '#0f62fe' : '#1f6feb',
     marginTop: 0,
   },
+  adminButton: { backgroundColor: Colors.accent },
+  devWrap: {
+    marginTop: 18,
+    paddingTop: 12,
+    borderTopColor: Colors.border,
+    borderTopWidth: 1,
+  },
+  devToggle: {
+    paddingVertical: 8,
+    alignItems: 'center',
+  },
+  devToggleText: {
+    color: Colors.textSecondary,
+    fontSize: 12,
+    textDecorationLine: 'underline',
+  },
   disabled: { opacity: 0.6 },
   buttonText: { color: Colors.white, fontSize: 16, fontWeight: '600' },
-  divider: { flexDirection: 'row', alignItems: 'center', marginVertical: 24 },
-  dividerLine: { flex: 1, height: 1, backgroundColor: Colors.border },
-  dividerText: { color: Colors.textLight, marginHorizontal: 16 },
 });
