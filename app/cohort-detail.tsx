@@ -97,7 +97,11 @@ export default function CohortDetailScreen() {
 
   const filteredUsers = useMemo(() => {
     if (!search) return users;
-    return users.filter(u => u.name.toLowerCase().includes(search.toLowerCase()));
+    const s = search.toLowerCase();
+    return users.filter(u =>
+      u.name.toLowerCase().includes(s) ||
+      u.aliases?.some(a => a.toLowerCase().includes(s))
+    );
   }, [users, search]);
 
   const filteredScoreAccessUsers = useMemo(() => {

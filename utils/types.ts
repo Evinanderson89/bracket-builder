@@ -45,6 +45,7 @@ export interface Player {
   handicap: number;
   numBrackets: number;
   email?: string;
+  aliases?: string[];
   createdAt: string;
 }
 

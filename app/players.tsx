@@ -19,13 +19,17 @@ export default function PlayersScreen() {
 
   const [selected, setSelected] = useState<string | null>(null);
   const [sortBy, setSortBy] = useState<SortKey>('name');
-  const [showForm, setShowForm] = useState<'add' | 'edit' | null>(null);
+  const [showForm, setShowForm] = useState<'add' | 'edit' | 'detail-edit' | null>(null);
   const [deleteTarget, setDeleteTarget] = useState<Player | null>(null);
 
   // Form fields
   const [formName, setFormName] = useState('');
   const [formAvg, setFormAvg] = useState('');
   const [formHdcp, setFormHdcp] = useState('');
+  const [formEmail, setFormEmail] = useState('');
+  const [formNumBrackets, setFormNumBrackets] = useState('1');
+  const [formAliases, setFormAliases] = useState<string[]>([]);
+  const [newAlias, setNewAlias] = useState('');
 
   const getTotalPayout = useCallback((name: string) =>
     payouts.filter(p => p.playerName?.toLowerCase() === name.toLowerCase() && !p.isOperator)
@@ -54,15 +58,51 @@ export default function PlayersScreen() {
     setFormName(u.name); setFormAvg(u.average.toString()); setFormHdcp(u.handicap.toString());
     setSelected(u.id); setShowForm('edit');
   };
+  const openDetailEdit = (u: Player) => {
+    setFormName(u.name);
+    setFormAvg(u.average.toString());
+    setFormHdcp(u.handicap.toString());
+    setFormEmail(u.email || '');
+    setFormNumBrackets(u.numBrackets.toString());
+    setFormAliases(u.aliases ? [...u.aliases] : []);
+    setNewAlias('');
+    setSelected(u.id);
+    setShowForm('detail-edit');
+  };
+
+  const addAlias = () => {
+    const trimmed = newAlias.trim();
+    if (!trimmed) return;
+    if (formAliases.some(a => a.toLowerCase() === trimmed.toLowerCase())) {
+      Alert.alert('Duplicate', 'This alias already exists');
+      return;
+    }
+    setFormAliases([...formAliases, trimmed]);
+    setNewAlias('');
+  };
+
+  const removeAlias = (index: number) => {
+    setFormAliases(formAliases.filter((_, i) => i !== index));
+  };
 
   const handleSave = async () => {
     if (!formName.trim() || !formAvg || !formHdcp) {
-      Alert.alert('Error', 'All fields are required'); return;
+      Alert.alert('Error', 'Name, Average, and Handicap are required'); return;
     }
     try {
       if (showForm === 'add') {
         await addUser({ name: formName.trim(), average: parseInt(formAvg), handicap: parseInt(formHdcp), numBrackets: 1 } as any);
         Alert.alert('Success', 'Player added');
+      } else if (selected && showForm === 'detail-edit') {
+        await updateUser(selected, {
+          name: formName.trim(),
+          average: parseInt(formAvg),
+          handicap: parseInt(formHdcp),
+          email: formEmail.trim() || undefined,
+          numBrackets: parseInt(formNumBrackets) || 1,
+          aliases: formAliases.length > 0 ? formAliases : undefined,
+        });
+        Alert.alert('Success', 'Player updated');
       } else if (selected) {
         await updateUser(selected, { name: formName.trim(), average: parseInt(formAvg), handicap: parseInt(formHdcp) });
         Alert.alert('Success', 'Player updated');
@@ -109,7 +149,73 @@ export default function PlayersScreen() {
 
   const selectedUser = users.find(u => u.id === selected);
 
-  // ─── Form View ─────────────────────────────────────────────────────────
+  // ─── Detail Edit Form View ──────────────────────────────────────────────
+
+  if (showForm === 'detail-edit') {
+    return (
+      <SafeAreaView style={styles.container}>
+        <NavigationHeader title="Detailed Edit Player" />
+        <ScrollView contentContainerStyle={styles.formWrap}>
+          <View style={styles.formCard}>
+            <Text style={styles.formLabel}>Name</Text>
+            <TextInput style={styles.input} value={formName} onChangeText={setFormName}
+              placeholder="Player name" placeholderTextColor={Colors.textLight} />
+
+            <Text style={styles.formLabel}>Email</Text>
+            <TextInput style={styles.input} value={formEmail} onChangeText={setFormEmail}
+              placeholder="Email address" placeholderTextColor={Colors.textLight}
+              keyboardType="email-address" autoCapitalize="none" />
+
+            <Text style={styles.formLabel}>Average</Text>
+            <TextInput style={styles.input} value={formAvg} onChangeText={setFormAvg}
+              placeholder="Average" keyboardType="numeric" placeholderTextColor={Colors.textLight} />
+
+            <Text style={styles.formLabel}>Handicap</Text>
+            <TextInput style={styles.input} value={formHdcp} onChangeText={setFormHdcp}
+              placeholder="Handicap" keyboardType="numeric" placeholderTextColor={Colors.textLight} />
+
+            <Text style={styles.formLabel}>Default Brackets</Text>
+            <TextInput style={styles.input} value={formNumBrackets} onChangeText={setFormNumBrackets}
+              placeholder="Number of brackets" keyboardType="numeric" placeholderTextColor={Colors.textLight} />
+
+            <Text style={styles.formLabel}>Aliases</Text>
+            <View style={{ flexDirection: 'row', gap: 8, marginBottom: 8 }}>
+              <TextInput style={[styles.input, { flex: 1 }]} value={newAlias} onChangeText={setNewAlias}
+                placeholder="Add alias..." placeholderTextColor={Colors.textLight}
+                onSubmitEditing={addAlias} />
+              <TouchableOpacity style={styles.aliasAddBtn} onPress={addAlias}>
+                <Text style={styles.addBtnText}>+ Add</Text>
+              </TouchableOpacity>
+            </View>
+            <View style={styles.aliasChipWrap}>
+              {formAliases.map((alias, idx) => (
+                <View key={idx} style={styles.aliasChip}>
+                  <Text style={styles.aliasChipText}>{alias}</Text>
+                  <TouchableOpacity onPress={() => removeAlias(idx)} hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}>
+                    <Text style={styles.aliasChipRemove}>x</Text>
+                  </TouchableOpacity>
+                </View>
+              ))}
+              {formAliases.length === 0 && (
+                <Text style={{ color: Colors.textSecondary, fontSize: 12, fontStyle: 'italic' }}>No aliases</Text>
+              )}
+            </View>
+
+            <View style={styles.formBtns}>
+              <TouchableOpacity style={styles.cancelBtn} onPress={() => setShowForm(null)}>
+                <Text style={styles.cancelBtnText}>Cancel</Text>
+              </TouchableOpacity>
+              <TouchableOpacity style={styles.saveBtn} onPress={handleSave}>
+                <Text style={styles.saveBtnText}>Save</Text>
+              </TouchableOpacity>
+            </View>
+          </View>
+        </ScrollView>
+      </SafeAreaView>
+    );
+  }
+
+  // ─── Simple Form View ─────────────────────────────────────────────────
 
   if (showForm) {
     return (
@@ -218,6 +324,7 @@ export default function PlayersScreen() {
                   <Text style={[styles.listItemSub, selected === u.id && { color: 'rgba(255,255,255,0.8)' }]}>
                     Avg: {u.average} | Hdcp: {u.handicap}
                     {sortBy === 'payout' ? ` | $${getTotalPayout(u.name)}` : ''}
+                    {u.aliases && u.aliases.length > 0 ? ` | aka: ${u.aliases.join(', ')}` : ''}
                   </Text>
                 </TouchableOpacity>
               );
@@ -233,6 +340,10 @@ export default function PlayersScreen() {
               <View style={styles.infoCard}>
                 <Text style={styles.infoName}>{selectedUser.name}</Text>
                 <Text style={styles.infoSub}>Avg: {selectedUser.average} | Hdcp: {selectedUser.handicap}</Text>
+                {selectedUser.email && <Text style={styles.infoSub}>{selectedUser.email}</Text>}
+                {selectedUser.aliases && selectedUser.aliases.length > 0 && (
+                  <Text style={styles.infoSub}>aka: {selectedUser.aliases.join(', ')}</Text>
+                )}
                 {isInActiveBracket(selectedUser.id) && (
                   <Text style={styles.warningText}>In active bracket</Text>
                 )}
@@ -240,6 +351,10 @@ export default function PlayersScreen() {
 
               <TouchableOpacity style={styles.actionBtn} onPress={() => openEdit(selectedUser)}>
                 <Text style={styles.actionBtnText}>Edit Player</Text>
+              </TouchableOpacity>
+
+              <TouchableOpacity style={[styles.actionBtn, styles.detailEditBtn]} onPress={() => openDetailEdit(selectedUser)}>
+                <Text style={styles.actionBtnText}>Detailed Edit</Text>
               </TouchableOpacity>
 
               <TouchableOpacity
@@ -346,6 +461,7 @@ const styles = StyleSheet.create({
   actionBtn: { backgroundColor: Colors.primary, padding: 16, borderRadius: 8, alignItems: 'center' },
   actionBtnText: { color: Colors.white, fontSize: 16, fontWeight: '600' },
   deleteBtn: { backgroundColor: Colors.danger },
+  detailEditBtn: { backgroundColor: Colors.accent },
   payoutBtn: { backgroundColor: Colors.success },
   disabledBtn: { opacity: 0.4 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },
@@ -378,4 +494,16 @@ const styles = StyleSheet.create({
   modalTitle: { fontSize: 20, fontWeight: 'bold', color: Colors.danger, marginBottom: 8 },
   modalSub: { color: Colors.textSecondary, marginBottom: 20, lineHeight: 20 },
   modalBtns: { flexDirection: 'row', gap: 12 },
+  // Alias styles
+  aliasAddBtn: {
+    backgroundColor: Colors.primary, paddingHorizontal: 14, paddingVertical: 10,
+    borderRadius: 8, justifyContent: 'center',
+  },
+  aliasChipWrap: { flexDirection: 'row', flexWrap: 'wrap', gap: 6, marginTop: 4 },
+  aliasChip: {
+    flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.surfaceSecondary,
+    borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6,
+  },
+  aliasChipText: { color: Colors.textPrimary, fontSize: 14, marginRight: 8 },
+  aliasChipRemove: { color: Colors.danger, fontWeight: 'bold', fontSize: 14 },
 });

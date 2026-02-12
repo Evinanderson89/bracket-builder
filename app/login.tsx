@@ -17,6 +17,7 @@ import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
 import { useAuth } from '../context/AuthContext';
+import { useApp } from '../context/AppContext';
 import { Colors } from '../styles/colors';
 
 WebBrowser.maybeCompleteAuthSession();
@@ -24,6 +25,7 @@ WebBrowser.maybeCompleteAuthSession();
 export default function LoginScreen() {
   const router = useRouter();
   const { signIn, signInDev, switchToAdmin, user } = useAuth();
+  const { ensurePlayerForAuthUser } = useApp();
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
   const [devLoading, setDevLoading] = useState(false);
@@ -58,7 +60,7 @@ export default function LoginScreen() {
         if (!infoRes.ok) throw new Error(info?.error_description || 'Failed to fetch Google profile');
         if (!info?.email_verified) throw new Error('Google account email is not verified');
 
-        await signIn({
+        const authUser = await signIn({
           id: info.sub || `google_${Date.now()}`,
           email: info.email,
           name: info.name || info.email,
@@ -67,6 +69,14 @@ export default function LoginScreen() {
           provider: 'google',
           emailVerified: !!info.email_verified,
         });
+
+        // Auto-create player record for Google-authenticated users
+        try {
+          await ensurePlayerForAuthUser(authUser);
+        } catch (e) {
+          console.warn('Auto-create player failed:', e);
+        }
+
         router.replace('/user-dashboard' as any);
       } catch (e: any) {
         Alert.alert('Google Sign-In Failed', e.message || 'Unable to authenticate with Google');

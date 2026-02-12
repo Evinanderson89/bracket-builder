@@ -27,6 +27,7 @@ interface AppContextValue {
   updateUser: (id: string, updates: Partial<Player>) => Promise<void>;
   deleteUser: (id: string) => Promise<void>;
   removeDuplicateUsers: () => Promise<number>;
+  ensurePlayerForAuthUser: (authUser: AuthUser) => Promise<Player>;
   requestPlayerAccess: (authUser: AuthUser) => Promise<PlayerRequest>;
   approvePlayerRequest: (requestId: string) => Promise<void>;
   rejectPlayerRequest: (requestId: string) => Promise<void>;
@@ -186,7 +187,10 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const addUser = useCallback(async (user: Omit<Player, 'id' | 'createdAt'>): Promise<Player> => {
     const nameLower = user.name.trim().toLowerCase();
-    if (users.find(u => u.name.trim().toLowerCase() === nameLower)) {
+    if (users.find(u =>
+      u.name.trim().toLowerCase() === nameLower ||
+      u.aliases?.some(a => a.trim().toLowerCase() === nameLower)
+    )) {
       throw new Error(`Player "${user.name}" already exists`);
     }
     const newUser: Player = { ...user, id: Date.now().toString(), createdAt: new Date().toISOString() };
@@ -229,6 +233,34 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (removed > 0) { setUsers(unique); await saveUsers(unique); }
     return removed;
   }, [users]);
+
+  const ensurePlayerForAuthUser = useCallback(async (authUser: AuthUser): Promise<Player> => {
+    const emailLower = authUser.email.trim().toLowerCase();
+    const nameLower = authUser.name.trim().toLowerCase();
+
+    // Check for existing player by email first, then name
+    const existing = users.find(u =>
+      (u.email && u.email.trim().toLowerCase() === emailLower) ||
+      u.name.trim().toLowerCase() === nameLower
+    );
+
+    if (existing) {
+      // Backfill email if the existing player doesn't have one
+      if (!existing.email && authUser.email) {
+        await updateUser(existing.id, { email: authUser.email.trim() });
+      }
+      return existing;
+    }
+
+    // Auto-create new player from Google profile
+    return addUser({
+      name: authUser.name.trim(),
+      email: authUser.email.trim(),
+      average: 200,
+      handicap: 0,
+      numBrackets: 1,
+    });
+  }, [users, addUser, updateUser]);
 
   const requestPlayerAccess = useCallback(async (authUser: AuthUser): Promise<PlayerRequest> => {
     if (!authUser.emailVerified) {
@@ -623,13 +655,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // ─── Payouts ─────────────────────────────────────────────────────────────
 
   const getPlayerPayouts = useCallback((playerName: string, date: string | null) => {
+    const search = playerName.toLowerCase();
     return payouts.filter(p => {
       if (p.isOperator) return false;
-      if (!p.playerName.toLowerCase().includes(playerName.toLowerCase())) return false;
+      const nameMatch = p.playerName.toLowerCase().includes(search);
+      // Also match if the player has this as an alias
+      const aliasMatch = !nameMatch && users.some(u =>
+        u.aliases?.some(a => a.toLowerCase().includes(search)) &&
+        u.name.toLowerCase() === p.playerName.toLowerCase()
+      );
+      if (!nameMatch && !aliasMatch) return false;
       if (date && p.date !== date) return false;
       return true;
     });
-  }, [payouts]);
+  }, [payouts, users]);
 
   const getOperatorPayouts = useCallback((date: string | null) => {
     return payouts.filter(p => p.isOperator && (!date || p.date === date));
@@ -648,7 +687,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
   const value: AppContextValue = {
     users, cohorts, brackets, games, payouts, playerRequests, loading,
-    addUser, updateUser, deleteUser, removeDuplicateUsers, requestPlayerAccess, approvePlayerRequest, rejectPlayerRequest,
+    addUser, updateUser, deleteUser, removeDuplicateUsers, ensurePlayerForAuthUser, requestPlayerAccess, approvePlayerRequest, rejectPlayerRequest,
     addCohort, updateCohort, deleteCohort, deployCohort, queueTournamentEntry, markTournamentEntryPaid, removeTournamentEntryRequest,
     updateBracket, getCohortBrackets,
     saveGame: saveGameFn, getPlayerGames,
