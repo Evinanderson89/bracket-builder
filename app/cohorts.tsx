@@ -12,25 +12,36 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 import { Colors } from '../styles/colors';
-import { CohortStatus, CohortType, TournamentKind } from '../utils/types';
-import type { Cohort, CohortTypeValue, TournamentKindValue } from '../utils/types';
+import { CohortStatus, CohortType, TournamentDescriptionMode, TournamentKind } from '../utils/types';
+import { formatBowlingCenterLocation, searchUsBowlingCenters, summarizeBowlingCenters } from '../utils/bowlingCenters';
+import { getStockTournamentDescription, getTournamentDescription } from '../utils/tournamentDescription';
+import type { BowlingCenter, Cohort, CohortTypeValue, TournamentDescriptionModeValue, TournamentKindValue } from '../utils/types';
 import NavigationHeader from '../components/NavigationHeader';
 
 type TabKey = 'active' | 'setup' | 'history';
 
 export default function CohortsScreen() {
   const router = useRouter();
-  const { cohorts, addCohort, deleteCohort } = useApp();
+  const { user } = useAuth();
+  const { cohorts, users, addCohort, deleteCohort } = useApp();
 
   const [tab, setTab] = useState<TabKey>('active');
   const [showCreate, setShowCreate] = useState(false);
   const [newName, setNewName] = useState('');
   const [newType, setNewType] = useState<CohortTypeValue>(CohortType.SCRATCH);
   const [newKind, setNewKind] = useState<TournamentKindValue>(TournamentKind.BRACKETS);
+  const [newDescriptionMode, setNewDescriptionMode] = useState<TournamentDescriptionModeValue>(TournamentDescriptionMode.STOCK);
+  const [newCustomDescription, setNewCustomDescription] = useState('');
   const [newTotalGames, setNewTotalGames] = useState('3');
   const [newBracketStartGame, setNewBracketStartGame] = useState(1);
   const [newScoreSourceId, setNewScoreSourceId] = useState('');
+  const [centerSearch, setCenterSearch] = useState('');
+  const [centerResults, setCenterResults] = useState<BowlingCenter[]>([]);
+  const [selectedCenters, setSelectedCenters] = useState<BowlingCenter[]>([]);
+  const [centersLoading, setCentersLoading] = useState(false);
+  const [centerSearchError, setCenterSearchError] = useState('');
   const [deleteTarget, setDeleteTarget] = useState<Cohort | null>(null);
 
   const parsedTotalGames = useMemo(() => {
@@ -48,6 +59,45 @@ export default function CohortsScreen() {
     const maxStart = Math.max(1, parsedTotalGames - 2);
     if (newBracketStartGame > maxStart) setNewBracketStartGame(maxStart);
   }, [parsedTotalGames, newBracketStartGame]);
+
+  useEffect(() => {
+    if (!showCreate) {
+      setCenterSearch('');
+      setCenterResults([]);
+      setCentersLoading(false);
+      setCenterSearchError('');
+      return;
+    }
+
+    const q = centerSearch.trim();
+    if (q.length < 2) {
+      setCenterResults([]);
+      setCenterSearchError('');
+      return;
+    }
+
+    let cancelled = false;
+    const timer = setTimeout(async () => {
+      setCentersLoading(true);
+      setCenterSearchError('');
+      try {
+        const results = await searchUsBowlingCenters(q, 24);
+        if (!cancelled) setCenterResults(results);
+      } catch (e: any) {
+        if (!cancelled) {
+          setCenterResults([]);
+          setCenterSearchError(e?.message || 'Unable to load bowling centers');
+        }
+      } finally {
+        if (!cancelled) setCentersLoading(false);
+      }
+    }, 350);
+
+    return () => {
+      cancelled = true;
+      clearTimeout(timer);
+    };
+  }, [centerSearch, showCreate]);
 
   const filtered = useMemo(() => {
     const statusMap: Record<TabKey, string> = {
@@ -70,13 +120,48 @@ export default function CohortsScreen() {
     return map;
   }, [cohorts]);
 
+  const stockDescriptionPreview = useMemo(() => {
+    return getStockTournamentDescription(
+      {
+        tournamentKind: newKind,
+        type: newType,
+        totalGames: parsedTotalGames,
+        bracketStartGame: newKind === TournamentKind.BRACKETS ? newBracketStartGame : 1,
+        scoreSourceCohortId: newScoreSourceId || null,
+        centers: selectedCenters,
+      },
+      { scoreSourceName: newScoreSourceId ? (sourceNameMap.get(newScoreSourceId) || null) : null },
+    );
+  }, [newKind, newType, parsedTotalGames, newBracketStartGame, newScoreSourceId, selectedCenters, sourceNameMap]);
+
+  const availableCenterResults = useMemo(() => {
+    const selected = new Set(selectedCenters.map(center => center.id));
+    return centerResults.filter(center => !selected.has(center.id));
+  }, [centerResults, selectedCenters]);
+
   const resetCreateForm = () => {
     setNewName('');
     setNewType(CohortType.SCRATCH);
     setNewKind(TournamentKind.BRACKETS);
+    setNewDescriptionMode(TournamentDescriptionMode.STOCK);
+    setNewCustomDescription('');
     setNewTotalGames('3');
     setNewBracketStartGame(1);
     setNewScoreSourceId('');
+    setCenterSearch('');
+    setCenterResults([]);
+    setSelectedCenters([]);
+    setCentersLoading(false);
+    setCenterSearchError('');
+  };
+
+  const toggleCenterSelection = (center: BowlingCenter) => {
+    setSelectedCenters(prev => {
+      if (prev.some(item => item.id === center.id)) {
+        return prev.filter(item => item.id !== center.id);
+      }
+      return [...prev, center];
+    });
   };
 
   const handleCreate = async () => {
@@ -84,15 +169,36 @@ export default function CohortsScreen() {
       Alert.alert('Required', 'Enter a tournament name');
       return;
     }
+    if (selectedCenters.length === 0) {
+      Alert.alert('Required', 'Select at least one bowling center for this tournament.');
+      return;
+    }
+    if (newDescriptionMode === TournamentDescriptionMode.CUSTOM && !newCustomDescription.trim()) {
+      Alert.alert('Required', 'Enter a custom tournament description or use stock description.');
+      return;
+    }
 
     try {
+      const creatorPlayer = user
+        ? users.find(u => (
+          (u.email && user.email && u.email.toLowerCase() === user.email.toLowerCase())
+          || u.name.toLowerCase() === user.name.toLowerCase()
+        ))
+        : null;
+
       await addCohort({
         name: newName.trim(),
         type: newType,
         tournamentKind: newKind,
+        descriptionMode: newDescriptionMode,
+        customDescription: newDescriptionMode === TournamentDescriptionMode.CUSTOM ? newCustomDescription.trim() : '',
+        createdByAuthUserId: user?.id || null,
+        createdByAuthUserEmail: user?.email || null,
+        createdByName: creatorPlayer?.name || user?.name || null,
         totalGames: parsedTotalGames,
         bracketStartGame: newKind === TournamentKind.BRACKETS ? newBracketStartGame : 1,
         scoreSourceCohortId: newScoreSourceId || null,
+        centers: selectedCenters,
       });
       resetCreateForm();
       setShowCreate(false);
@@ -152,14 +258,20 @@ export default function CohortsScreen() {
         ) : filtered.map(c => {
           const sourceName = c.scoreSourceCohortId ? sourceNameMap.get(c.scoreSourceCohortId) : null;
           const bracketEnd = Math.min(c.totalGames || 3, (c.bracketStartGame || 1) + 2);
+          const adminLabel = c.createdByName || c.createdByAuthUserEmail || 'Not recorded';
+          const centersSummary = summarizeBowlingCenters(c.centers || []);
+          const description = getTournamentDescription(c, { scoreSourceName: sourceName || null });
 
           return (
-            <TouchableOpacity
+            <View
               key={c.id}
               style={[styles.card, tab === 'active' && styles.cardActive]}
-              onPress={() => router.push({ pathname: '/cohort-detail' as any, params: { cohortId: c.id } })}
             >
-              <View style={styles.cardBody}>
+              <TouchableOpacity
+                style={styles.cardBody}
+                activeOpacity={0.85}
+                onPress={() => router.push({ pathname: '/cohort-detail' as any, params: { cohortId: c.id } })}
+              >
                 <View style={styles.cardTop}>
                   <Text style={styles.cardType}>{c.tournamentKind} | {c.type}</Text>
                   {c.status === CohortStatus.ACTIVE && (
@@ -181,19 +293,24 @@ export default function CohortsScreen() {
                 {!!sourceName && (
                   <Text style={styles.cardMetaSource}>Scores from: {sourceName}</Text>
                 )}
-              </View>
+                <Text style={styles.cardMetaAdmin}>Admin: {adminLabel}</Text>
+                <Text style={styles.cardMetaCenters}>{centersSummary}</Text>
+                <Text style={styles.cardDescription} numberOfLines={3}>{description}</Text>
+              </TouchableOpacity>
               <View style={styles.cardFooter}>
                 <TouchableOpacity
-                  style={styles.openBtn}
+                  style={[styles.openBtn, c.status === CohortStatus.NOT_DEPLOYED && styles.openBtnWithDelete]}
                   onPress={() => router.push({ pathname: '/cohort-detail' as any, params: { cohortId: c.id } })}
                 >
                   <Text style={styles.openBtnText}>Open Dashboard</Text>
                 </TouchableOpacity>
-                <TouchableOpacity style={styles.delIcon} onPress={() => setDeleteTarget(c)}>
-                  <Text style={styles.delIconText}>X</Text>
-                </TouchableOpacity>
+                {c.status === CohortStatus.NOT_DEPLOYED && (
+                  <TouchableOpacity style={styles.delIcon} onPress={() => setDeleteTarget(c)}>
+                    <Text style={styles.delIconText}>Delete</Text>
+                  </TouchableOpacity>
+                )}
               </View>
-            </TouchableOpacity>
+            </View>
           );
         })}
         <View style={{ height: 80 }} />
@@ -203,7 +320,7 @@ export default function CohortsScreen() {
         <Text style={styles.fabText}>+ New</Text>
       </TouchableOpacity>
 
-      <Modal visible={showCreate} transparent animationType="slide" onRequestClose={() => setShowCreate(false)}>
+      <Modal visible={showCreate} transparent animationType="slide" onRequestClose={() => { setShowCreate(false); resetCreateForm(); }}>
         <View style={styles.overlay}>
           <View style={styles.modal}>
             <View style={styles.modalHeader}>
@@ -308,6 +425,86 @@ export default function CohortsScreen() {
                 );
               })}
 
+              <Text style={styles.label}>Bowling Centers (United States)</Text>
+              <TextInput
+                style={styles.input}
+                value={centerSearch}
+                onChangeText={setCenterSearch}
+                placeholder="Search centers by name (min 2 chars)"
+                placeholderTextColor={Colors.textLight}
+              />
+
+              {centersLoading && <Text style={styles.centerStatusText}>Searching centers...</Text>}
+              {!!centerSearchError && <Text style={styles.centerErrorText}>{centerSearchError}</Text>}
+
+              {selectedCenters.length > 0 && (
+                <View style={styles.centerChipWrap}>
+                  {selectedCenters.map(center => (
+                    <TouchableOpacity
+                      key={center.id}
+                      style={styles.centerChip}
+                      onPress={() => toggleCenterSelection(center)}
+                    >
+                      <Text style={styles.centerChipText}>{formatBowlingCenterLocation(center) ? `${center.name} (${formatBowlingCenterLocation(center)})` : center.name}</Text>
+                      <Text style={styles.centerChipRemove}>X</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+
+              {centerSearch.trim().length >= 2 && !centersLoading && availableCenterResults.length > 0 && (
+                <View style={styles.centerResultsWrap}>
+                  {availableCenterResults.map(center => (
+                    <TouchableOpacity
+                      key={center.id}
+                      style={styles.centerResultRow}
+                      onPress={() => toggleCenterSelection(center)}
+                    >
+                      <View style={{ flex: 1 }}>
+                        <Text style={styles.centerResultName}>{center.name}</Text>
+                        {!!formatBowlingCenterLocation(center) && (
+                          <Text style={styles.centerResultMeta}>{formatBowlingCenterLocation(center)}</Text>
+                        )}
+                      </View>
+                      <Text style={styles.centerResultAdd}>Add</Text>
+                    </TouchableOpacity>
+                  ))}
+                </View>
+              )}
+
+              <Text style={styles.label}>Tournament Description</Text>
+              <View style={styles.typeRow}>
+                {[TournamentDescriptionMode.STOCK, TournamentDescriptionMode.CUSTOM].map(mode => (
+                  <TouchableOpacity
+                    key={mode}
+                    style={[styles.typeBtn, newDescriptionMode === mode && styles.typeBtnActive]}
+                    onPress={() => setNewDescriptionMode(mode)}
+                  >
+                    <Text style={[styles.typeBtnText, newDescriptionMode === mode && styles.typeBtnTextActive]}>
+                      {mode === TournamentDescriptionMode.STOCK ? 'Stock' : 'Custom'}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+
+              {newDescriptionMode === TournamentDescriptionMode.STOCK ? (
+                <View style={styles.descriptionPreviewBox}>
+                  <Text style={styles.descriptionPreviewLabel}>Stock Preview</Text>
+                  <Text style={styles.descriptionPreviewText}>{stockDescriptionPreview}</Text>
+                </View>
+              ) : (
+                <TextInput
+                  style={[styles.input, styles.descriptionInput]}
+                  value={newCustomDescription}
+                  onChangeText={setNewCustomDescription}
+                  multiline
+                  numberOfLines={5}
+                  placeholder="Describe how this tournament works..."
+                  placeholderTextColor={Colors.textLight}
+                  textAlignVertical="top"
+                />
+              )}
+
               <TouchableOpacity style={styles.submitBtn} onPress={handleCreate}>
                 <Text style={styles.submitBtnText}>Create</Text>
               </TouchableOpacity>
@@ -321,7 +518,7 @@ export default function CohortsScreen() {
           <View style={[styles.modal, { borderColor: Colors.danger }]}> 
             <Text style={[styles.modalTitle, { color: Colors.danger }]}>Delete Tournament?</Text>
             <Text style={styles.deleteSub}>
-              Delete {`"${deleteTarget?.name}"`}? All brackets, games, and payouts will be permanently removed.
+              Delete draft tournament {`"${deleteTarget?.name}"`}? This cannot be undone.
             </Text>
             <View style={styles.modalBtns}>
               <TouchableOpacity style={styles.cancelBtn} onPress={() => setDeleteTarget(null)}>
@@ -371,11 +568,15 @@ const styles = StyleSheet.create({
   cardDate: { color: Colors.textSecondary, fontSize: 12, marginBottom: 6 },
   cardMeta: { color: Colors.textSecondary, fontSize: 12 },
   cardMetaSource: { color: Colors.primary, fontSize: 12, marginTop: 2, fontWeight: '700' },
+  cardMetaAdmin: { color: Colors.textSecondary, fontSize: 12, marginTop: 2, fontWeight: '600' },
+  cardMetaCenters: { color: Colors.textSecondary, fontSize: 12, marginTop: 2 },
+  cardDescription: { color: Colors.textPrimary, fontSize: 13, lineHeight: 18, marginTop: 10 },
   cardFooter: { flexDirection: 'row', borderTopWidth: 1, borderTopColor: Colors.border, backgroundColor: Colors.surfaceSecondary },
-  openBtn: { flex: 1, padding: 12, alignItems: 'center', borderRightWidth: 1, borderRightColor: Colors.border },
+  openBtn: { flex: 1, padding: 12, alignItems: 'center' },
+  openBtnWithDelete: { borderRightWidth: 1, borderRightColor: Colors.border },
   openBtnText: { color: Colors.primary, fontWeight: 'bold' },
-  delIcon: { padding: 12, width: 50, alignItems: 'center', justifyContent: 'center' },
-  delIconText: { color: Colors.danger, fontWeight: 'bold' },
+  delIcon: { padding: 12, width: 84, alignItems: 'center', justifyContent: 'center' },
+  delIconText: { color: Colors.danger, fontWeight: 'bold', fontSize: 12, textTransform: 'uppercase' },
   fab: {
     position: 'absolute',
     bottom: 24,
@@ -405,6 +606,60 @@ const styles = StyleSheet.create({
     color: Colors.white,
     marginBottom: 16,
   },
+  descriptionInput: { minHeight: 110 },
+  descriptionPreviewBox: {
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 10,
+    backgroundColor: Colors.surfaceSecondary,
+    padding: 12,
+    marginBottom: 16,
+  },
+  descriptionPreviewLabel: {
+    color: Colors.primary,
+    fontSize: 11,
+    fontWeight: '700',
+    textTransform: 'uppercase',
+    marginBottom: 6,
+    letterSpacing: 0.5,
+  },
+  descriptionPreviewText: { color: Colors.textPrimary, fontSize: 13, lineHeight: 19 },
+  centerStatusText: { color: Colors.textSecondary, fontSize: 12, marginBottom: 8 },
+  centerErrorText: { color: Colors.danger, fontSize: 12, marginBottom: 8 },
+  centerChipWrap: { flexDirection: 'row', flexWrap: 'wrap', marginBottom: 8 },
+  centerChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.primary,
+    backgroundColor: 'rgba(34,211,238,0.12)',
+    borderRadius: 999,
+    paddingVertical: 6,
+    paddingHorizontal: 10,
+    marginRight: 6,
+    marginBottom: 6,
+  },
+  centerChipText: { color: Colors.primary, fontSize: 12, fontWeight: '700', marginRight: 8 },
+  centerChipRemove: { color: Colors.textPrimary, fontSize: 11, fontWeight: '800' },
+  centerResultsWrap: {
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 10,
+    backgroundColor: Colors.surfaceSecondary,
+    marginBottom: 12,
+    overflow: 'hidden',
+  },
+  centerResultRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+  },
+  centerResultName: { color: Colors.textPrimary, fontSize: 13, fontWeight: '700' },
+  centerResultMeta: { color: Colors.textSecondary, fontSize: 11, marginTop: 2 },
+  centerResultAdd: { color: Colors.primary, fontWeight: '800', fontSize: 12, marginLeft: 10 },
   typeRow: { flexDirection: 'row', gap: 12, marginBottom: 16 },
   typeBtn: {
     flex: 1,

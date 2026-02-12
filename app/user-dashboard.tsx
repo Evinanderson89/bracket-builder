@@ -18,7 +18,7 @@ import NavigationHeader from '../components/NavigationHeader';
 import { CohortStatus, PayoutAmounts, TournamentKind } from '../utils/types';
 import type { Bracket, Player } from '../utils/types';
 
-type UtilityKey = 'entry' | 'brackets' | 'stats' | 'profile';
+type UtilityKey = 'entry' | 'brackets' | 'scores' | 'stats' | 'profile';
 
 function isPlayerEliminated(bracket: Bracket, playerId: string) {
   return bracket.structure.rounds.some(round => (
@@ -151,6 +151,26 @@ export default function UserDashboard() {
     return cohorts.filter(c => c.status === CohortStatus.NOT_DEPLOYED).length;
   }, [cohorts]);
 
+  const scoreEntryCohorts = useMemo(() => {
+    if (!user) return [];
+    const playerId = playerRecord?.id || null;
+
+    return cohorts.filter(c => {
+      if (!(c.status === CohortStatus.ACTIVE || c.status === CohortStatus.COMPLETE)) return false;
+
+      const byCreatorId = !!(c.createdByAuthUserId && c.createdByAuthUserId === user.id);
+      const byCreatorEmail = !!(
+        c.createdByAuthUserEmail
+        && user.email
+        && c.createdByAuthUserEmail.toLowerCase() === user.email.toLowerCase()
+      );
+      if (byCreatorId || byCreatorEmail) return true;
+
+      if (!playerId) return false;
+      return (c.scoreEntryUserIds || []).includes(playerId);
+    });
+  }, [cohorts, playerRecord?.id, user]);
+
   const utilityItems = useMemo(() => ([
     {
       key: 'entry' as const,
@@ -170,6 +190,15 @@ export default function UserDashboard() {
       description: 'See all your active and completed brackets in one place.',
       cta: 'Open My Brackets',
     },
+    ...(scoreEntryCohorts.length > 0 ? [{
+      key: 'scores' as const,
+      label: 'Scores',
+      icon: 'clipboard-outline' as const,
+      route: '/game-entry',
+      meta: `${scoreEntryCohorts.length} tournament${scoreEntryCohorts.length === 1 ? '' : 's'} assigned`,
+      description: 'Enter and update game scores for tournaments where you have score-entry rights.',
+      cta: 'Open Score Entry',
+    }] : []),
     {
       key: 'stats' as const,
       label: 'Stats',
@@ -188,7 +217,7 @@ export default function UserDashboard() {
       description: 'Update account details and keep your player profile current.',
       cta: 'Open Profile',
     },
-  ]), [myBrackets.length, openTournamentCount, participation?.wins, user?.email]);
+  ]), [myBrackets.length, openTournamentCount, participation?.wins, scoreEntryCohorts.length, user?.email]);
 
   const selectedUtility = utilityItems.find(item => item.key === openUtility) || null;
 

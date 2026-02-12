@@ -1,4 +1,4 @@
-import React, { useEffect, useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import {
   View,
   Text,
@@ -13,6 +13,7 @@ import {
 } from 'react-native';
 import { useLocalSearchParams } from 'expo-router';
 import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 import { Colors } from '../styles/colors';
 import { CohortType, TournamentKind } from '../utils/types';
 import {
@@ -35,6 +36,7 @@ interface ScoreOverride {
 
 export default function GameEntryScreen() {
   const { cohortId: paramId } = useLocalSearchParams<{ cohortId: string }>();
+  const { user, mode } = useAuth();
   const { cohorts, users, brackets, games, saveGame, updateBracket, getCohortBrackets } = useApp();
 
   const [selectedId, setSelectedId] = useState(paramId || '');
@@ -43,16 +45,50 @@ export default function GameEntryScreen() {
   const [dropdown, setDropdown] = useState(false);
   const [syncing, setSyncing] = useState(false);
 
+  const loggedInPlayer = useMemo(() => {
+    if (!user) return null;
+    return users.find(u => (
+      (u.email && user.email && u.email.toLowerCase() === user.email.toLowerCase())
+      || u.name.toLowerCase() === user.name.toLowerCase()
+    ));
+  }, [user, users]);
+
+  const hasScoreEntryAccess = useCallback((cohort: Cohort) => {
+    if (mode === 'admin') return true;
+    if (!user) return false;
+
+    const byCreatorId = !!(cohort.createdByAuthUserId && user.id === cohort.createdByAuthUserId);
+    const byCreatorEmail = !!(
+      cohort.createdByAuthUserEmail
+      && user.email
+      && cohort.createdByAuthUserEmail.toLowerCase() === user.email.toLowerCase()
+    );
+    if (byCreatorId || byCreatorEmail) return true;
+
+    if (!loggedInPlayer) return false;
+    return (cohort.scoreEntryUserIds || []).includes(loggedInPlayer.id);
+  }, [mode, user, loggedInPlayer]);
+
   useEffect(() => {
-    if (paramId && paramId !== selectedId) setSelectedId(paramId);
-  }, [paramId, selectedId]);
+    if (!paramId) return;
+    setSelectedId(paramId);
+  }, [paramId]);
 
-  const activeCohorts = cohorts
-    .filter(c => c.status === 'active' || c.status === 'complete')
-    .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  const activeCohorts = useMemo(() => {
+    return cohorts
+      .filter(c => c.status === 'active' || c.status === 'complete')
+      .filter(c => hasScoreEntryAccess(c))
+      .sort((a, b) => new Date(b.createdAt).getTime() - new Date(a.createdAt).getTime());
+  }, [cohorts, hasScoreEntryAccess]);
 
-  const selectedCohort = cohorts.find(c => c.id === selectedId);
+  useEffect(() => {
+    if (selectedId && activeCohorts.some(c => c.id === selectedId)) return;
+    setSelectedId(activeCohorts[0]?.id || '');
+  }, [activeCohorts, selectedId]);
+
+  const selectedCohort = activeCohorts.find(c => c.id === selectedId);
   const cohortBrackets = useMemo(() => (selectedId ? getCohortBrackets(selectedId) : []), [selectedId, getCohortBrackets]);
+  const canEditSelected = !!selectedCohort && hasScoreEntryAccess(selectedCohort);
 
   const scoreSetCohortId = selectedCohort ? (selectedCohort.scoreSourceCohortId || selectedCohort.id) : selectedId;
   const scoreSetCohortName = scoreSetCohortId
@@ -197,7 +233,7 @@ export default function GameEntryScreen() {
   };
 
   const handleBlur = async (playerId: string, gameNumber: number) => {
-    if (!selectedCohort) return;
+    if (!selectedCohort || !canEditSelected) return;
 
     const val = tempScore.trim() === '' ? null : parseInt(tempScore, 10);
     if (tempScore.trim() !== '' && (val === null || Number.isNaN(val) || val < 0 || val > 300)) {
@@ -232,7 +268,7 @@ export default function GameEntryScreen() {
   };
 
   const handleSync = async () => {
-    if (!selectedCohort) return;
+    if (!selectedCohort || !canEditSelected) return;
 
     setSyncing(true);
     try {
@@ -269,6 +305,14 @@ export default function GameEntryScreen() {
       return (
         <View style={styles.cellDisabled}>
           <Text style={styles.disabledText}>-</Text>
+        </View>
+      );
+    }
+
+    if (!canEditSelected) {
+      return (
+        <View style={[styles.cell, !countsTowardBracket && styles.cellSoft]}>
+          <Text style={[styles.cellText, !countsTowardBracket && styles.cellTextSoft]}>{score ?? '-'}</Text>
         </View>
       );
     }
@@ -314,10 +358,18 @@ export default function GameEntryScreen() {
           <View style={styles.selectionBox}>
             <View style={styles.selCol}>
               <Text style={styles.selTitle}>Select Tournament</Text>
-              <Text style={styles.selSub}>Choose a tournament and enter game-by-game scores.</Text>
+              <Text style={styles.selSub}>
+                {mode === 'user' && activeCohorts.length === 0
+                  ? 'No score-entry access yet. Ask a tournament admin to grant you rights.'
+                  : 'Choose a tournament and enter game-by-game scores.'}
+              </Text>
             </View>
             <View style={styles.selCol}>
-              <TouchableOpacity style={styles.dropBtn} onPress={() => setDropdown(true)}>
+              <TouchableOpacity
+                style={[styles.dropBtn, activeCohorts.length === 0 && styles.dropBtnOff]}
+                onPress={() => setDropdown(true)}
+                disabled={activeCohorts.length === 0}
+              >
                 <Text style={styles.dropBtnText}>
                   {selectedCohort
                     ? `${selectedCohort.name} (${selectedCohort.tournamentKind} | ${selectedCohort.type})`
@@ -326,12 +378,25 @@ export default function GameEntryScreen() {
                 <Text style={styles.dropArrow}>▼</Text>
               </TouchableOpacity>
               {selectedCohort && (
-                <TouchableOpacity style={[styles.syncBtn, syncing && styles.syncBtnOff]} onPress={handleSync} disabled={syncing}>
+                <TouchableOpacity
+                  style={[styles.syncBtn, (syncing || !canEditSelected) && styles.syncBtnOff]}
+                  onPress={handleSync}
+                  disabled={syncing || !canEditSelected}
+                >
                   {syncing ? <ActivityIndicator color={Colors.white} size="small" /> : <Text style={styles.syncBtnText}>Update Brackets</Text>}
                 </TouchableOpacity>
               )}
             </View>
           </View>
+
+          {mode === 'user' && activeCohorts.length === 0 && (
+            <View style={styles.accessWarn}>
+              <Text style={styles.accessWarnTitle}>Score Entry Access Needed</Text>
+              <Text style={styles.accessWarnText}>
+                Tournament creators can assign you as a score-entry user even if you are not in that tournament.
+              </Text>
+            </View>
+          )}
 
           {selectedCohort && (
             <View style={styles.contextWrap}>
@@ -355,24 +420,34 @@ export default function GameEntryScreen() {
                   <TouchableOpacity onPress={() => setDropdown(false)}><Text style={styles.closeBtn}>X</Text></TouchableOpacity>
                 </View>
                 <ScrollView style={styles.dropList}>
-                  {activeCohorts.map(c => (
-                    <TouchableOpacity
-                      key={c.id}
-                      style={[styles.dropItem, selectedId === c.id && styles.dropItemSel]}
-                      onPress={() => {
-                        setSelectedId(c.id);
-                        setDropdown(false);
-                      }}
-                    >
-                      <View style={{ flex: 1 }}>
-                        <Text style={[styles.dropItemText, selectedId === c.id && styles.dropItemTextSel]}>{c.name}</Text>
-                        <Text style={[styles.dropItemSub, selectedId === c.id && styles.dropItemTextSel]}>
-                          {c.tournamentKind} | {c.type}
-                        </Text>
-                      </View>
-                      {selectedId === c.id && <Text style={styles.dropCheck}>✓</Text>}
-                    </TouchableOpacity>
-                  ))}
+                  {activeCohorts.length === 0 ? (
+                    <View style={styles.dropEmpty}>
+                      <Text style={styles.dropEmptyText}>
+                        {mode === 'user'
+                          ? 'No tournaments available for your score-entry rights.'
+                          : 'No active or completed tournaments yet.'}
+                      </Text>
+                    </View>
+                  ) : (
+                    activeCohorts.map(c => (
+                      <TouchableOpacity
+                        key={c.id}
+                        style={[styles.dropItem, selectedId === c.id && styles.dropItemSel]}
+                        onPress={() => {
+                          setSelectedId(c.id);
+                          setDropdown(false);
+                        }}
+                      >
+                        <View style={{ flex: 1 }}>
+                          <Text style={[styles.dropItemText, selectedId === c.id && styles.dropItemTextSel]}>{c.name}</Text>
+                          <Text style={[styles.dropItemSub, selectedId === c.id && styles.dropItemTextSel]}>
+                            {c.tournamentKind} | {c.type}
+                          </Text>
+                        </View>
+                        {selectedId === c.id && <Text style={styles.dropCheck}>✓</Text>}
+                      </TouchableOpacity>
+                    ))
+                  )}
                 </ScrollView>
               </View>
             </TouchableOpacity>
@@ -444,6 +519,7 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.white,
   },
   dropBtnText: { fontSize: 15, color: Colors.headerDark, fontWeight: '600', flex: 1 },
+  dropBtnOff: { opacity: 0.55 },
   dropArrow: { fontSize: 12, color: Colors.textSecondary, marginLeft: 8 },
   syncBtn: {
     backgroundColor: 'rgba(255,255,255,0.2)',
@@ -457,6 +533,16 @@ const styles = StyleSheet.create({
   },
   syncBtnOff: { opacity: 0.6 },
   syncBtnText: { color: Colors.white, fontWeight: 'bold' },
+  accessWarn: {
+    borderRadius: 10,
+    borderWidth: 1,
+    borderColor: Colors.warning,
+    backgroundColor: 'rgba(245,158,11,0.12)',
+    padding: 10,
+    marginBottom: 10,
+  },
+  accessWarnTitle: { color: Colors.warning, fontWeight: '800', fontSize: 12, marginBottom: 3 },
+  accessWarnText: { color: Colors.textPrimary, fontSize: 12, lineHeight: 17 },
   contextWrap: {
     borderRadius: 10,
     borderWidth: 1,
@@ -472,6 +558,8 @@ const styles = StyleSheet.create({
   dropTitle: { fontSize: 18, fontWeight: 'bold', color: Colors.textPrimary },
   closeBtn: { fontSize: 20, color: Colors.textSecondary, fontWeight: 'bold' },
   dropList: { maxHeight: 400 },
+  dropEmpty: { padding: 18 },
+  dropEmptyText: { color: Colors.textSecondary, fontSize: 13, lineHeight: 18 },
   dropItem: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', padding: 16, borderBottomWidth: 1, borderBottomColor: Colors.border },
   dropItemSel: { backgroundColor: Colors.primaryDark },
   dropItemText: { fontSize: 16, color: Colors.textPrimary, fontWeight: '600' },

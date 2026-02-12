@@ -9,8 +9,8 @@ import {
   getPlayerRequests, savePlayerRequests,
 } from '../utils/storage';
 import { createBrackets, createBracketStructure } from '../utils/bracketLogic';
-import { CohortStatus, CohortType, PayoutAmounts, TournamentKind } from '../utils/types';
-import type { Player, Cohort, Bracket, Game, Payout, AuthUser, PlayerRequest } from '../utils/types';
+import { CohortStatus, CohortType, PayoutAmounts, TournamentDescriptionMode, TournamentKind } from '../utils/types';
+import type { Player, Cohort, Bracket, Game, Payout, AuthUser, PlayerRequest, PendingEntryRequest, BowlingCenter } from '../utils/types';
 
 // ─── Context type ────────────────────────────────────────────────────────────
 
@@ -31,10 +31,29 @@ interface AppContextValue {
   approvePlayerRequest: (requestId: string) => Promise<void>;
   rejectPlayerRequest: (requestId: string) => Promise<void>;
 
-  addCohort: (c: Pick<Cohort, 'name' | 'type' | 'tournamentKind' | 'totalGames' | 'bracketStartGame' | 'scoreSourceCohortId'>) => Promise<Cohort>;
+  addCohort: (
+    c: Pick<
+      Cohort,
+      'name'
+      | 'type'
+      | 'tournamentKind'
+      | 'descriptionMode'
+      | 'customDescription'
+      | 'createdByAuthUserId'
+      | 'createdByAuthUserEmail'
+      | 'createdByName'
+      | 'totalGames'
+      | 'bracketStartGame'
+      | 'scoreSourceCohortId'
+      | 'centers'
+    >
+  ) => Promise<Cohort>;
   updateCohort: (id: string, updates: Partial<Cohort>) => Promise<void>;
   deleteCohort: (id: string) => Promise<void>;
   deployCohort: (id: string, selectedUsers: Player[], counts: Record<string, number>) => Promise<void>;
+  queueTournamentEntry: (cohortId: string, player: Pick<Player, 'id' | 'name'>, bracketCount: number) => Promise<void>;
+  markTournamentEntryPaid: (cohortId: string, playerId: string) => Promise<void>;
+  removeTournamentEntryRequest: (cohortId: string, playerId: string) => Promise<void>;
 
   updateBracket: (id: string, updates: Partial<Bracket>) => Promise<void>;
   getCohortBrackets: (cohortId: string) => Bracket[];
@@ -70,18 +89,57 @@ function normalizeCohort(raw: any): Cohort {
   const tournamentKind = raw?.tournamentKind === TournamentKind.SERIES
     ? TournamentKind.SERIES
     : TournamentKind.BRACKETS;
+  const descriptionMode = raw?.descriptionMode === TournamentDescriptionMode.CUSTOM
+    ? TournamentDescriptionMode.CUSTOM
+    : TournamentDescriptionMode.STOCK;
+
+  const pendingEntryRequests: PendingEntryRequest[] = Array.isArray(raw?.pendingEntryRequests)
+    ? raw.pendingEntryRequests
+      .map((req: any) => ({
+        playerId: String(req?.playerId || ''),
+        playerName: String(req?.playerName || ''),
+        bracketCount: Math.max(1, Math.floor(Number(req?.bracketCount) || 1)),
+        requestedAt: req?.requestedAt || new Date().toISOString(),
+      }))
+      .filter((req: PendingEntryRequest) => req.playerId)
+    : [];
+  const scoreEntryUserIds = Array.isArray(raw?.scoreEntryUserIds)
+    ? Array.from(new Set(raw.scoreEntryUserIds.map((id: any) => String(id)).filter(Boolean)))
+    : [];
+  const centers: BowlingCenter[] = Array.isArray(raw?.centers)
+    ? raw.centers
+      .map((center: any) => ({
+        id: String(center?.id || ''),
+        name: String(center?.name || '').trim(),
+        address: center?.address ? String(center.address) : undefined,
+        city: center?.city ? String(center.city) : undefined,
+        state: center?.state ? String(center.state) : undefined,
+        postalCode: center?.postalCode ? String(center.postalCode) : undefined,
+        latitude: Number.isFinite(Number(center?.latitude)) ? Number(center.latitude) : undefined,
+        longitude: Number.isFinite(Number(center?.longitude)) ? Number(center.longitude) : undefined,
+      }))
+      .filter((center: BowlingCenter) => center.id && center.name)
+    : [];
 
   return {
     id: String(raw?.id ?? Date.now()),
     name: String(raw?.name ?? 'Tournament'),
     type,
     tournamentKind,
+    descriptionMode,
+    customDescription: typeof raw?.customDescription === 'string' ? raw.customDescription : '',
+    createdByAuthUserId: raw?.createdByAuthUserId ? String(raw.createdByAuthUserId) : null,
+    createdByAuthUserEmail: raw?.createdByAuthUserEmail ? String(raw.createdByAuthUserEmail) : null,
+    createdByName: raw?.createdByName ? String(raw.createdByName) : null,
+    scoreEntryUserIds,
+    centers,
     totalGames,
     bracketStartGame: tournamentKind === TournamentKind.BRACKETS ? bracketStartGame : 1,
     scoreSourceCohortId: typeof raw?.scoreSourceCohortId === 'string' ? raw.scoreSourceCohortId : null,
     status: Object.values(CohortStatus).includes(raw?.status) ? raw.status : CohortStatus.NOT_DEPLOYED,
     selectedUserIds: Array.isArray(raw?.selectedUserIds) ? raw.selectedUserIds : [],
     userBracketCounts: raw?.userBracketCounts && typeof raw.userBracketCounts === 'object' ? raw.userBracketCounts : {},
+    pendingEntryRequests,
     createdAt: raw?.createdAt || new Date().toISOString(),
   };
 }
@@ -148,7 +206,15 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const next = users.filter(u => u.id !== id);
     setUsers(next);
     await saveUsers(next);
-  }, [users]);
+
+    const nextCohorts = cohorts.map(c => {
+      const nextScoreUsers = (c.scoreEntryUserIds || []).filter(uid => uid !== id);
+      if (nextScoreUsers.length === (c.scoreEntryUserIds || []).length) return c;
+      return { ...c, scoreEntryUserIds: nextScoreUsers };
+    });
+    setCohorts(nextCohorts);
+    await saveCohorts(nextCohorts);
+  }, [users, cohorts]);
 
   const removeDuplicateUsers = useCallback(async (): Promise<number> => {
     const seen = new Set<string>();
@@ -246,7 +312,21 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   // ─── Cohorts ─────────────────────────────────────────────────────────────
 
   const addCohort = useCallback(async (
-    c: Pick<Cohort, 'name' | 'type' | 'tournamentKind' | 'totalGames' | 'bracketStartGame' | 'scoreSourceCohortId'>,
+    c: Pick<
+      Cohort,
+      'name'
+      | 'type'
+      | 'tournamentKind'
+      | 'descriptionMode'
+      | 'customDescription'
+      | 'createdByAuthUserId'
+      | 'createdByAuthUserEmail'
+      | 'createdByName'
+      | 'totalGames'
+      | 'bracketStartGame'
+      | 'scoreSourceCohortId'
+      | 'centers'
+    >,
   ): Promise<Cohort> => {
     const totalGames = Math.max(3, Math.floor(c.totalGames || 3));
     const maxBracketStart = Math.max(1, totalGames - 2);
@@ -257,6 +337,26 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       name: c.name,
       type: c.type,
       tournamentKind: c.tournamentKind,
+      descriptionMode: c.descriptionMode || TournamentDescriptionMode.STOCK,
+      customDescription: c.customDescription || '',
+      createdByAuthUserId: c.createdByAuthUserId || null,
+      createdByAuthUserEmail: c.createdByAuthUserEmail || null,
+      createdByName: c.createdByName || null,
+      scoreEntryUserIds: [],
+      centers: Array.isArray(c.centers)
+        ? c.centers
+          .map(center => ({
+            id: String(center?.id || ''),
+            name: String(center?.name || '').trim(),
+            address: center?.address ? String(center.address) : undefined,
+            city: center?.city ? String(center.city) : undefined,
+            state: center?.state ? String(center.state) : undefined,
+            postalCode: center?.postalCode ? String(center.postalCode) : undefined,
+            latitude: Number.isFinite(Number(center?.latitude)) ? Number(center.latitude) : undefined,
+            longitude: Number.isFinite(Number(center?.longitude)) ? Number(center.longitude) : undefined,
+          }))
+          .filter(center => center.id && center.name)
+        : [],
       totalGames,
       bracketStartGame: c.tournamentKind === TournamentKind.BRACKETS ? bracketStartGame : 1,
       scoreSourceCohortId: c.scoreSourceCohortId || null,
@@ -264,6 +364,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       status: CohortStatus.NOT_DEPLOYED,
       selectedUserIds: [],
       userBracketCounts: {},
+      pendingEntryRequests: [],
     };
     const next = [...cohorts, cohort];
     setCohorts(next);
@@ -278,6 +379,12 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   }, [cohorts]);
 
   const deleteCohort = useCallback(async (id: string) => {
+    const target = cohorts.find(c => c.id === id);
+    if (!target) throw new Error('Tournament not found');
+    if (target.status !== CohortStatus.NOT_DEPLOYED) {
+      throw new Error('Only draft tournaments can be deleted.');
+    }
+
     const nextBrackets = brackets.filter(b => b.cohortId !== id);
     setBrackets(nextBrackets); await saveBrackets(nextBrackets);
 
@@ -287,7 +394,9 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const nextPayouts = payouts.filter(p => p.cohortId !== id);
     setPayouts(nextPayouts); await savePayouts(nextPayouts);
 
-    const nextCohorts = cohorts.filter(c => c.id !== id);
+    const nextCohorts = cohorts
+      .filter(c => c.id !== id)
+      .map(c => (c.scoreSourceCohortId === id ? { ...c, scoreSourceCohortId: null } : c));
     setCohorts(nextCohorts); await saveCohorts(nextCohorts);
   }, [brackets, games, payouts, cohorts]);
 
@@ -350,6 +459,77 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     setCohorts(nextCohorts);
     await saveCohorts(nextCohorts);
   }, [brackets, cohorts]);
+
+  const queueTournamentEntry = useCallback(async (
+    cohortId: string,
+    player: Pick<Player, 'id' | 'name'>,
+    bracketCount: number,
+  ) => {
+    if (!player?.id) throw new Error('Player required');
+    if (bracketCount < 1) throw new Error('Bracket count must be at least 1');
+
+    const cohort = cohorts.find(c => c.id === cohortId);
+    if (!cohort) throw new Error('Tournament not found');
+    if (cohort.status !== CohortStatus.NOT_DEPLOYED) {
+      throw new Error('Tournament is not accepting new requests.');
+    }
+
+    const nextRequest: PendingEntryRequest = {
+      playerId: player.id,
+      playerName: player.name,
+      bracketCount,
+      requestedAt: new Date().toISOString(),
+    };
+
+    const pending = cohort.pendingEntryRequests || [];
+    const existing = pending.find(req => req.playerId === player.id);
+    const nextRequestCount = (existing?.bracketCount || 0) + bracketCount;
+    const mergedRequest: PendingEntryRequest = {
+      ...nextRequest,
+      bracketCount: nextRequestCount,
+    };
+    const nextPending = existing
+      ? pending.map(req => (req.playerId === player.id ? mergedRequest : req))
+      : [mergedRequest, ...pending];
+
+    const nextCohorts = cohorts.map(c => (c.id === cohortId ? { ...c, pendingEntryRequests: nextPending } : c));
+    setCohorts(nextCohorts);
+    await saveCohorts(nextCohorts);
+  }, [cohorts]);
+
+  const markTournamentEntryPaid = useCallback(async (cohortId: string, playerId: string) => {
+    const cohort = cohorts.find(c => c.id === cohortId);
+    if (!cohort) throw new Error('Tournament not found');
+
+    const pending = cohort.pendingEntryRequests || [];
+    const request = pending.find(req => req.playerId === playerId);
+    if (!request) throw new Error('Pending request not found');
+
+    const nextPending = pending.filter(req => req.playerId !== playerId);
+    const nextSelected = cohort.selectedUserIds.includes(playerId)
+      ? cohort.selectedUserIds
+      : [...cohort.selectedUserIds, playerId];
+    const existingPaidCount = cohort.userBracketCounts?.[playerId] || 0;
+    const nextCounts = { ...cohort.userBracketCounts, [playerId]: existingPaidCount + request.bracketCount };
+
+    const nextCohorts = cohorts.map(c => (
+      c.id === cohortId
+        ? { ...c, pendingEntryRequests: nextPending, selectedUserIds: nextSelected, userBracketCounts: nextCounts }
+        : c
+    ));
+    setCohorts(nextCohorts);
+    await saveCohorts(nextCohorts);
+  }, [cohorts]);
+
+  const removeTournamentEntryRequest = useCallback(async (cohortId: string, playerId: string) => {
+    const cohort = cohorts.find(c => c.id === cohortId);
+    if (!cohort) throw new Error('Tournament not found');
+
+    const nextPending = (cohort.pendingEntryRequests || []).filter(req => req.playerId !== playerId);
+    const nextCohorts = cohorts.map(c => (c.id === cohortId ? { ...c, pendingEntryRequests: nextPending } : c));
+    setCohorts(nextCohorts);
+    await saveCohorts(nextCohorts);
+  }, [cohorts]);
 
   // ─── Brackets ────────────────────────────────────────────────────────────
 
@@ -469,7 +649,7 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const value: AppContextValue = {
     users, cohorts, brackets, games, payouts, playerRequests, loading,
     addUser, updateUser, deleteUser, removeDuplicateUsers, requestPlayerAccess, approvePlayerRequest, rejectPlayerRequest,
-    addCohort, updateCohort, deleteCohort, deployCohort,
+    addCohort, updateCohort, deleteCohort, deployCohort, queueTournamentEntry, markTournamentEntryPaid, removeTournamentEntryRequest,
     updateBracket, getCohortBrackets,
     saveGame: saveGameFn, getPlayerGames,
     getPlayerPayouts, getOperatorPayouts,

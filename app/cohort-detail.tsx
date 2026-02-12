@@ -13,9 +13,12 @@ import {
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useApp } from '../context/AppContext';
+import { useAuth } from '../context/AuthContext';
 import { Colors } from '../styles/colors';
+import { formatBowlingCenterLocation, summarizeBowlingCenters } from '../utils/bowlingCenters';
 import { CohortStatus, CohortType, TournamentKind } from '../utils/types';
 import { calculateTotalScore, getBracketGameWindow, isPlayerLiveInCohort } from '../utils/bracketLogic';
+import { getTournamentDescription } from '../utils/tournamentDescription';
 import NavigationHeader from '../components/NavigationHeader';
 
 type TabKey = 'brackets' | 'series' | 'roster';
@@ -23,11 +26,23 @@ type TabKey = 'brackets' | 'series' | 'roster';
 export default function CohortDetailScreen() {
   const router = useRouter();
   const { cohortId } = useLocalSearchParams<{ cohortId: string }>();
-  const { cohorts, getCohortBrackets, users, deployCohort, updateCohort, getPlayerGames } = useApp();
+  const { user, mode } = useAuth();
+  const {
+    cohorts,
+    getCohortBrackets,
+    users,
+    deployCohort,
+    updateCohort,
+    getPlayerGames,
+    markTournamentEntryPaid,
+    removeTournamentEntryRequest,
+  } = useApp();
 
   const [activeTab, setActiveTab] = useState<TabKey>('brackets');
   const [rosterModal, setRosterModal] = useState(false);
   const [search, setSearch] = useState('');
+  const [scoreAccessSearch, setScoreAccessSearch] = useState('');
+  const [scoreAccessModal, setScoreAccessModal] = useState(false);
   const [showCompleted, setShowCompleted] = useState(false);
 
   const cohort = cohorts.find(c => c.id === cohortId);
@@ -84,6 +99,11 @@ export default function CohortDetailScreen() {
     if (!search) return users;
     return users.filter(u => u.name.toLowerCase().includes(search.toLowerCase()));
   }, [users, search]);
+
+  const filteredScoreAccessUsers = useMemo(() => {
+    if (!scoreAccessSearch) return users;
+    return users.filter(u => u.name.toLowerCase().includes(scoreAccessSearch.toLowerCase()));
+  }, [users, scoreAccessSearch]);
 
   const estBrackets = useMemo(() => {
     if (!cohort || isSeries) return 0;
@@ -152,6 +172,21 @@ export default function CohortDetailScreen() {
     }).sort((a, b) => b.total - a.total || b.enteredGames - a.enteredGames || a.player.name.localeCompare(b.player.name));
   }, [cohort, getPlayerGames, isSeries, selectedUsers]);
 
+  const isCreator = useMemo(() => {
+    if (!cohort || !user) return false;
+
+    const byId = !!(cohort.createdByAuthUserId && user.id === cohort.createdByAuthUserId);
+    const byEmail = !!(
+      cohort.createdByAuthUserEmail
+      && user.email
+      && cohort.createdByAuthUserEmail.toLowerCase() === user.email.toLowerCase()
+    );
+    return byId || byEmail;
+  }, [cohort, user]);
+
+  const creatorKnown = !!(cohort?.createdByAuthUserId || cohort?.createdByAuthUserEmail);
+  const canManageScoreAccess = isCreator || (mode === 'admin' && !creatorKnown);
+
   const toggleUser = (uid: string) => {
     if (!cohort) return;
     const isIn = selectedIds.includes(uid);
@@ -205,6 +240,49 @@ export default function CohortDetailScreen() {
   const scoreSourceName = cohort.scoreSourceCohortId
     ? cohorts.find(c => c.id === cohort.scoreSourceCohortId)?.name
     : null;
+  const creatorLabel = cohort.createdByName || cohort.createdByAuthUserEmail || 'Not recorded';
+  const assignedScoreEntryUsers = (cohort.scoreEntryUserIds || [])
+    .map(uid => users.find(u => u.id === uid))
+    .filter((u): u is typeof users[number] => !!u);
+  const centerSummary = summarizeBowlingCenters(cohort.centers || []);
+  const descriptionText = getTournamentDescription(cohort, { scoreSourceName: scoreSourceName || null });
+  const pendingRequests = (cohort.pendingEntryRequests || [])
+    .slice()
+    .sort((a, b) => b.requestedAt.localeCompare(a.requestedAt));
+
+  const handleMarkPaid = async (playerId: string) => {
+    try {
+      await markTournamentEntryPaid(cohort.id, playerId);
+      Alert.alert('Marked Paid', 'Entry moved from pending queue to paid roster.');
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Unable to mark entry paid');
+    }
+  };
+
+  const handleRemovePending = async (playerId: string) => {
+    try {
+      await removeTournamentEntryRequest(cohort.id, playerId);
+      Alert.alert('Removed', 'Pending entry request removed.');
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Unable to remove request');
+    }
+  };
+
+  const toggleScoreEntryUser = async (userId: string) => {
+    if (!canManageScoreAccess) {
+      Alert.alert('Not Allowed', 'Only the tournament creator can manage score-entry rights.');
+      return;
+    }
+    const current = new Set(cohort.scoreEntryUserIds || []);
+    if (current.has(userId)) current.delete(userId);
+    else current.add(userId);
+
+    try {
+      await updateCohort(cohort.id, { scoreEntryUserIds: Array.from(current) });
+    } catch (e: any) {
+      Alert.alert('Error', e.message || 'Unable to update score-entry rights');
+    }
+  };
 
   const renderBrackets = () => (
     <View style={styles.tabContent}>
@@ -305,9 +383,72 @@ export default function CohortDetailScreen() {
 
   const renderRoster = () => (
     <View style={styles.tabContent}>
+      <View style={styles.scoreAccessWrap}>
+        <Text style={styles.scoreAccessTitle}>Score Entry Rights</Text>
+        <Text style={styles.scoreAccessMeta}>Tournament admin: {creatorLabel}</Text>
+        <Text style={styles.scoreAccessHint}>
+          Assigned users can enter scores even if they are not participating in this tournament.
+        </Text>
+
+        {assignedScoreEntryUsers.length === 0 ? (
+          <Text style={styles.scoreAccessEmpty}>No delegated score-entry users yet.</Text>
+        ) : (
+          assignedScoreEntryUsers.map(assignedUser => (
+            <View key={assignedUser.id} style={styles.scoreAccessRow}>
+              <Text style={styles.scoreAccessName}>{assignedUser.name}</Text>
+              <TouchableOpacity
+                style={styles.scoreAccessRemoveBtn}
+                onPress={() => toggleScoreEntryUser(assignedUser.id)}
+                disabled={!canManageScoreAccess}
+              >
+                <Text style={styles.scoreAccessRemoveText}>Remove</Text>
+              </TouchableOpacity>
+            </View>
+          ))
+        )}
+
+        {canManageScoreAccess ? (
+          <TouchableOpacity style={styles.scoreAccessManageBtn} onPress={() => setScoreAccessModal(true)}>
+            <Text style={styles.scoreAccessManageText}>Manage Score Entry Rights</Text>
+          </TouchableOpacity>
+        ) : (
+          <Text style={styles.scoreAccessLocked}>
+            {creatorKnown
+              ? 'Only the tournament creator can manage these rights.'
+              : 'Sign in as the tournament creator to manage these rights.'}
+          </Text>
+        )}
+      </View>
+
+      {cohort.status === CohortStatus.NOT_DEPLOYED && (
+        <View style={styles.pendingWrap}>
+          <Text style={styles.pendingTitle}>Pending Payment Queue</Text>
+          {pendingRequests.length === 0 ? (
+            <Text style={styles.pendingEmpty}>No pending payment requests.</Text>
+          ) : (
+            pendingRequests.map(req => (
+              <View key={req.playerId} style={styles.pendingRow}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.pendingName}>{req.playerName}</Text>
+                  <Text style={styles.pendingMeta}>
+                    Requested {req.bracketCount} {req.bracketCount === 1 ? 'bracket' : 'brackets'}
+                  </Text>
+                </View>
+                <TouchableOpacity style={styles.pendingPayBtn} onPress={() => handleMarkPaid(req.playerId)}>
+                  <Text style={styles.pendingPayBtnText}>Mark Paid</Text>
+                </TouchableOpacity>
+                <TouchableOpacity style={styles.pendingRemoveBtn} onPress={() => handleRemovePending(req.playerId)}>
+                  <Text style={styles.pendingRemoveBtnText}>X</Text>
+                </TouchableOpacity>
+              </View>
+            ))
+          )}
+        </View>
+      )}
+
       {selectedUsers.length === 0 ? (
         <View style={styles.empty}>
-          <Text style={styles.emptyTitle}>Roster Empty</Text>
+          <Text style={styles.emptyTitle}>Paid Roster Empty</Text>
           {cohort.status === CohortStatus.NOT_DEPLOYED && (
             <TouchableOpacity style={styles.emptyBtn} onPress={() => setRosterModal(true)}>
               <Text style={styles.emptyBtnText}>Manage Roster</Text>
@@ -317,7 +458,7 @@ export default function CohortDetailScreen() {
       ) : (
         <>
           <View style={styles.rosterHeader}>
-            <Text style={styles.rosterCount}>{selectedUsers.length} Players</Text>
+            <Text style={styles.rosterCount}>{selectedUsers.length} Paid Players</Text>
             {cohort.status === CohortStatus.NOT_DEPLOYED && (
               <TouchableOpacity onPress={() => setRosterModal(true)}>
                 <Text style={styles.editLink}>Edit Roster</Text>
@@ -382,6 +523,28 @@ export default function CohortDetailScreen() {
         <View style={styles.hudRow}><Text style={styles.hudLabel}>Status</Text><Text style={[styles.hudValue, { color: statusColor(cohort.status) }]}>{cohort.status.toUpperCase()}</Text></View>
       </View>
 
+      <View style={styles.descriptionCard}>
+        <Text style={styles.descriptionTitle}>How This Tournament Works</Text>
+        <Text style={styles.descriptionText}>{descriptionText}</Text>
+      </View>
+
+      <View style={styles.centersCard}>
+        <Text style={styles.centersTitle}>Bowling Centers</Text>
+        <Text style={styles.centersSummary}>{centerSummary}</Text>
+        {(cohort.centers || []).length > 0 && (
+          <View style={styles.centersList}>
+            {(cohort.centers || []).map(center => (
+              <View key={center.id} style={styles.centerRow}>
+                <Text style={styles.centerName}>{center.name}</Text>
+                {!!formatBowlingCenterLocation(center) && (
+                  <Text style={styles.centerMeta}>{formatBowlingCenterLocation(center)}</Text>
+                )}
+              </View>
+            ))}
+          </View>
+        )}
+      </View>
+
       <View style={styles.tabs}>
         {tabItems.map(t => (
           <TouchableOpacity key={t.key} style={[styles.tabBtn, activeTab === t.key && styles.tabBtnActive]} onPress={() => setActiveTab(t.key)}>
@@ -421,6 +584,53 @@ export default function CohortDetailScreen() {
           </TouchableOpacity>
         </View>
       )}
+
+      <Modal
+        visible={scoreAccessModal}
+        animationType="slide"
+        presentationStyle="pageSheet"
+        onRequestClose={() => setScoreAccessModal(false)}
+      >
+        <View style={styles.modalContainer}>
+          <View style={styles.modalHeader}>
+            <Text style={styles.modalTitle}>Score Entry Rights</Text>
+            <TouchableOpacity onPress={() => setScoreAccessModal(false)}><Text style={styles.doneText}>Done</Text></TouchableOpacity>
+          </View>
+
+          <View style={styles.searchBar}>
+            <TextInput
+              style={styles.searchInput}
+              placeholder="Search registered users..."
+              placeholderTextColor={Colors.textLight}
+              value={scoreAccessSearch}
+              onChangeText={setScoreAccessSearch}
+            />
+          </View>
+
+          <ScrollView style={styles.modalList}>
+            {filteredScoreAccessUsers.map(candidate => {
+              const selected = (cohort.scoreEntryUserIds || []).includes(candidate.id);
+              return (
+                <TouchableOpacity
+                  key={candidate.id}
+                  style={[styles.scoreAccessPickRow, selected && styles.scoreAccessPickRowSel]}
+                  onPress={() => toggleScoreEntryUser(candidate.id)}
+                  disabled={!canManageScoreAccess}
+                >
+                  <View style={{ flex: 1 }}>
+                    <Text style={[styles.scoreAccessPickName, selected && styles.scoreAccessPickNameSel]}>{candidate.name}</Text>
+                    <Text style={styles.scoreAccessPickMeta}>{selected ? 'Has score entry rights' : 'Tap to grant rights'}</Text>
+                  </View>
+                  <View style={[styles.scoreAccessPickCheck, selected && styles.scoreAccessPickCheckOn]}>
+                    {selected && <Text style={styles.scoreAccessPickCheckText}>✓</Text>}
+                  </View>
+                </TouchableOpacity>
+              );
+            })}
+            <View style={{ height: 40 }} />
+          </ScrollView>
+        </View>
+      </Modal>
 
       <Modal visible={rosterModal} animationType="slide" presentationStyle="pageSheet" onRequestClose={() => setRosterModal(false)}>
         <View style={styles.modalContainer}>
@@ -491,6 +701,54 @@ const styles = StyleSheet.create({
   hudRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4 },
   hudLabel: { fontSize: 11, color: Colors.textSecondary, textTransform: 'uppercase', fontWeight: '700', letterSpacing: 0.7 },
   hudValue: { fontSize: 13, fontWeight: '700', color: Colors.white },
+  descriptionCard: {
+    marginHorizontal: 16,
+    marginBottom: 8,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 10,
+    padding: 12,
+  },
+  descriptionTitle: {
+    color: Colors.primary,
+    fontSize: 11,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 6,
+  },
+  descriptionText: { color: Colors.textPrimary, fontSize: 13, lineHeight: 19 },
+  centersCard: {
+    marginHorizontal: 16,
+    marginBottom: 8,
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 10,
+    padding: 12,
+  },
+  centersTitle: {
+    color: Colors.info,
+    fontSize: 11,
+    fontWeight: '800',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+    marginBottom: 6,
+  },
+  centersSummary: { color: Colors.textPrimary, fontSize: 12, lineHeight: 18 },
+  centersList: { marginTop: 8 },
+  centerRow: {
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 8,
+    backgroundColor: Colors.surfaceSecondary,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginBottom: 6,
+  },
+  centerName: { color: Colors.textPrimary, fontWeight: '700', fontSize: 13 },
+  centerMeta: { color: Colors.textSecondary, fontSize: 11, marginTop: 2 },
   tabs: {
     flexDirection: 'row',
     marginHorizontal: 16,
@@ -611,6 +869,126 @@ const styles = StyleSheet.create({
   totalCol: { alignItems: 'flex-end', marginLeft: 10 },
   totalLabel: { color: Colors.textSecondary, fontSize: 10, textTransform: 'uppercase', fontWeight: '700' },
   totalValue: { color: Colors.textPrimary, fontSize: 18, fontWeight: '800', marginTop: 2 },
+  scoreAccessWrap: {
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 14,
+  },
+  scoreAccessTitle: { color: Colors.info, fontWeight: '800', fontSize: 13 },
+  scoreAccessMeta: { color: Colors.textSecondary, fontSize: 12, marginTop: 4 },
+  scoreAccessHint: { color: Colors.textPrimary, fontSize: 12, lineHeight: 17, marginTop: 6 },
+  scoreAccessEmpty: { color: Colors.textSecondary, fontSize: 12, marginTop: 8 },
+  scoreAccessRow: {
+    marginTop: 8,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 8,
+    backgroundColor: Colors.surfaceSecondary,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+  },
+  scoreAccessName: { color: Colors.textPrimary, fontWeight: '700', fontSize: 13, flex: 1 },
+  scoreAccessRemoveBtn: {
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 6,
+    backgroundColor: Colors.background,
+    paddingHorizontal: 8,
+    paddingVertical: 6,
+  },
+  scoreAccessRemoveText: { color: Colors.textSecondary, fontWeight: '700', fontSize: 11 },
+  scoreAccessManageBtn: {
+    marginTop: 10,
+    borderWidth: 1,
+    borderColor: Colors.info,
+    backgroundColor: 'rgba(59,130,246,0.14)',
+    borderRadius: 8,
+    paddingVertical: 10,
+    alignItems: 'center',
+  },
+  scoreAccessManageText: { color: Colors.info, fontWeight: '800', fontSize: 12 },
+  scoreAccessLocked: { color: Colors.warning, fontSize: 12, marginTop: 10 },
+  scoreAccessPickRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.border,
+    backgroundColor: Colors.surface,
+    borderRadius: 10,
+    paddingHorizontal: 12,
+    paddingVertical: 10,
+    marginBottom: 8,
+  },
+  scoreAccessPickRowSel: {
+    borderColor: Colors.info,
+    backgroundColor: 'rgba(59,130,246,0.10)',
+  },
+  scoreAccessPickName: { color: Colors.textPrimary, fontSize: 14, fontWeight: '700' },
+  scoreAccessPickNameSel: { color: Colors.info },
+  scoreAccessPickMeta: { color: Colors.textSecondary, fontSize: 11, marginTop: 2 },
+  scoreAccessPickCheck: {
+    width: 22,
+    height: 22,
+    borderRadius: 6,
+    borderWidth: 2,
+    borderColor: Colors.borderLight,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginLeft: 10,
+  },
+  scoreAccessPickCheckOn: {
+    borderColor: Colors.info,
+    backgroundColor: Colors.info,
+  },
+  scoreAccessPickCheckText: { color: Colors.white, fontWeight: '800', fontSize: 12 },
+  pendingWrap: {
+    backgroundColor: Colors.surface,
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 10,
+    padding: 12,
+    marginBottom: 14,
+  },
+  pendingTitle: { color: Colors.warning, fontWeight: '800', fontSize: 13, marginBottom: 8 },
+  pendingEmpty: { color: Colors.textSecondary, fontSize: 12 },
+  pendingRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    borderWidth: 1,
+    borderColor: Colors.border,
+    borderRadius: 8,
+    backgroundColor: Colors.surfaceSecondary,
+    paddingHorizontal: 10,
+    paddingVertical: 8,
+    marginBottom: 8,
+  },
+  pendingName: { color: Colors.textPrimary, fontWeight: '700', fontSize: 13 },
+  pendingMeta: { color: Colors.textSecondary, fontSize: 11, marginTop: 2 },
+  pendingPayBtn: {
+    backgroundColor: Colors.success,
+    borderRadius: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 7,
+    marginLeft: 8,
+  },
+  pendingPayBtnText: { color: Colors.white, fontWeight: '700', fontSize: 11 },
+  pendingRemoveBtn: {
+    marginLeft: 6,
+    borderRadius: 6,
+    borderWidth: 1,
+    borderColor: Colors.danger,
+    backgroundColor: 'rgba(251,113,133,0.14)',
+    width: 28,
+    height: 28,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  pendingRemoveBtnText: { color: Colors.danger, fontWeight: '800', fontSize: 11 },
   rosterHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
   rosterCount: { color: Colors.textSecondary, fontWeight: '600' },
   editLink: { color: Colors.primary, fontWeight: 'bold' },

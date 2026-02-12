@@ -22,6 +22,13 @@ export const TournamentKind = {
 
 export type TournamentKindValue = (typeof TournamentKind)[keyof typeof TournamentKind];
 
+export const TournamentDescriptionMode = {
+  STOCK: 'stock',
+  CUSTOM: 'custom',
+} as const;
+
+export type TournamentDescriptionModeValue = (typeof TournamentDescriptionMode)[keyof typeof TournamentDescriptionMode];
+
 export const PayoutAmounts = {
   FIRST_PLACE: 25,
   SECOND_PLACE: 10,
@@ -64,17 +71,43 @@ export interface Bracket {
   createdAt: string;
 }
 
+export interface PendingEntryRequest {
+  playerId: string;
+  playerName: string;
+  bracketCount: number;
+  requestedAt: string;
+}
+
+export interface BowlingCenter {
+  id: string;
+  name: string;
+  address?: string;
+  city?: string;
+  state?: string;
+  postalCode?: string;
+  latitude?: number;
+  longitude?: number;
+}
+
 export interface Cohort {
   id: string;
   name: string;
   type: CohortTypeValue;
   tournamentKind: TournamentKindValue;
+  descriptionMode: TournamentDescriptionModeValue;
+  customDescription: string;
+  createdByAuthUserId: string | null;
+  createdByAuthUserEmail: string | null;
+  createdByName: string | null;
+  scoreEntryUserIds: string[]; // registered users allowed to enter scores
+  centers: BowlingCenter[];
   totalGames: number;
   bracketStartGame: number; // for bracket tournaments, first counted game in 3-game window
   scoreSourceCohortId: string | null; // if set, scores are read from this cohort
   status: CohortStatusValue;
   selectedUserIds: string[];
   userBracketCounts: Record<string, number>;
+  pendingEntryRequests: PendingEntryRequest[];
   createdAt: string;
 }
 

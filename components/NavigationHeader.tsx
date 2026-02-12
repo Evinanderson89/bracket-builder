@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../styles/colors';
+import { useAuth } from '../context/AuthContext';
 
 const BACK_ROUTES: Record<string, string> = {
   '/login': '/',
@@ -44,9 +45,14 @@ function HeaderButton({ icon, label, onPress }: HeaderButtonProps) {
 export default function NavigationHeader({ title, showBack = true, showHome = true }: Props) {
   const router = useRouter();
   const pathname = usePathname();
+  const { mode } = useAuth();
 
   const handleBack = () => {
     if (pathname === '/' || pathname === '/index' || pathname === '') return;
+    if (pathname === '/game-entry') {
+      router.push((mode === 'user' ? '/user-dashboard' : '/') as any);
+      return;
+    }
     router.push((BACK_ROUTES[pathname] ?? '/') as any);
   };
 
