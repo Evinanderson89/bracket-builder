@@ -5,6 +5,7 @@ import {
 import { useRouter } from 'expo-router';
 import { useApp } from '../context/AppContext';
 import { Colors } from '../styles/colors';
+import { Fonts } from '../styles/fonts';
 import NavigationHeader from '../components/NavigationHeader';
 import type { Player } from '../utils/types';
 
@@ -321,7 +322,7 @@ export default function PlayersScreen() {
                     {u.name}{' '}
                     <Text style={{ fontSize: 12, opacity: 0.7 }}>({bracketCount})</Text>
                   </Text>
-                  <Text style={[styles.listItemSub, selected === u.id && { color: 'rgba(255,255,255,0.8)' }]}>
+                  <Text style={[styles.listItemSub, selected === u.id && { color: Colors.warmWhite80 }]}>
                     Avg: {u.average} | Hdcp: {u.handicap}
                     {sortBy === 'payout' ? ` | $${getTotalPayout(u.name)}` : ''}
                     {u.aliases && u.aliases.length > 0 ? ` | aka: ${u.aliases.join(', ')}` : ''}
@@ -410,9 +411,9 @@ const styles = StyleSheet.create({
     flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center',
     padding: 16, borderBottomWidth: 1, borderBottomColor: Colors.border, backgroundColor: Colors.headerDark,
   },
-  listTitle: { fontSize: 18, fontWeight: 'bold', color: Colors.white },
+  listTitle: { fontSize: 18, fontFamily: Fonts.bodyBold, color: Colors.white },
   addBtn: { backgroundColor: Colors.primary, paddingHorizontal: 12, paddingVertical: 6, borderRadius: 6 },
-  addBtnText: { color: Colors.white, fontWeight: '600' },
+  addBtnText: { color: Colors.white, fontFamily: Fonts.bodySemiBold },
   sortBar: {
     flexDirection: 'row', padding: 10, gap: 6, borderBottomWidth: 1,
     borderBottomColor: Colors.border, backgroundColor: Colors.surfaceSecondary,
@@ -422,57 +423,57 @@ const styles = StyleSheet.create({
     borderWidth: 1, borderColor: Colors.border, backgroundColor: Colors.background,
   },
   sortChipActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  sortChipText: { fontSize: 12, fontWeight: '600', color: Colors.textPrimary },
+  sortChipText: { fontSize: 12, fontFamily: Fonts.bodySemiBold, color: Colors.textPrimary },
   sortChipTextActive: { color: Colors.white },
   list: { flex: 1 },
   requestSection: {
     margin: 12, padding: 12, borderRadius: 10, borderWidth: 1,
-    borderColor: Colors.warning, backgroundColor: 'rgba(245,158,11,0.08)',
+    borderColor: Colors.warning, backgroundColor: Colors.badgeWarningBg,
   },
-  requestTitle: { color: Colors.warning, fontWeight: 'bold', marginBottom: 10 },
+  requestTitle: { color: Colors.warning, fontFamily: Fonts.bodyBold, marginBottom: 10 },
   requestCard: {
     padding: 10, borderRadius: 8, borderWidth: 1, borderColor: Colors.border,
     backgroundColor: Colors.surface, marginBottom: 8,
   },
   requestInfo: { marginBottom: 8 },
-  requestName: { color: Colors.white, fontWeight: '600', fontSize: 14 },
-  requestEmail: { color: Colors.textSecondary, fontSize: 12 },
+  requestName: { color: Colors.white, fontFamily: Fonts.bodySemiBold, fontSize: 14 },
+  requestEmail: { color: Colors.textSecondary, fontFamily: Fonts.bodyRegular, fontSize: 12 },
   requestActions: { flexDirection: 'row', gap: 8 },
   requestBtn: { flex: 1, paddingVertical: 8, borderRadius: 6, alignItems: 'center' },
   requestApprove: { backgroundColor: Colors.success },
   requestReject: { backgroundColor: Colors.danger },
-  requestBtnText: { color: Colors.white, fontWeight: '600', fontSize: 12 },
+  requestBtnText: { color: Colors.white, fontFamily: Fonts.bodySemiBold, fontSize: 12 },
   listItem: { padding: 16, borderBottomWidth: 1, borderBottomColor: Colors.border },
   listItemActive: { backgroundColor: Colors.primary },
-  listItemName: { fontSize: 16, fontWeight: '600', color: Colors.textPrimary, marginBottom: 4 },
+  listItemName: { fontSize: 16, fontFamily: Fonts.bodySemiBold, color: Colors.textPrimary, marginBottom: 4 },
   textWhite: { color: Colors.white },
-  listItemSub: { fontSize: 12, color: Colors.textSecondary },
+  listItemSub: { fontSize: 12, fontFamily: Fonts.bodyRegular, color: Colors.textSecondary },
   // Action column
   actionCol: { flex: 1, backgroundColor: Colors.background },
-  actionTitle: { fontSize: 18, fontWeight: 'bold', color: Colors.white, padding: 16 },
+  actionTitle: { fontSize: 18, fontFamily: Fonts.bodyBold, color: Colors.white, padding: 16 },
   actions: { padding: 16, gap: 12 },
   infoCard: {
     backgroundColor: Colors.surface, padding: 16, borderRadius: 8,
     borderWidth: 1, borderColor: Colors.border, marginBottom: 4,
   },
-  infoName: { fontSize: 20, fontWeight: 'bold', color: Colors.textPrimary, marginBottom: 4 },
-  infoSub: { fontSize: 14, color: Colors.textSecondary },
-  warningText: { color: Colors.danger, fontSize: 12, fontWeight: '600', marginTop: 8 },
+  infoName: { fontSize: 20, fontFamily: Fonts.bodyBold, color: Colors.textPrimary, marginBottom: 4 },
+  infoSub: { fontSize: 14, fontFamily: Fonts.bodyRegular, color: Colors.textSecondary },
+  warningText: { color: Colors.danger, fontSize: 12, fontFamily: Fonts.bodySemiBold, marginTop: 8 },
   actionBtn: { backgroundColor: Colors.primary, padding: 16, borderRadius: 8, alignItems: 'center' },
-  actionBtnText: { color: Colors.white, fontSize: 16, fontWeight: '600' },
+  actionBtnText: { color: Colors.white, fontSize: 16, fontFamily: Fonts.bodySemiBold },
   deleteBtn: { backgroundColor: Colors.danger },
   detailEditBtn: { backgroundColor: Colors.accent },
   payoutBtn: { backgroundColor: Colors.success },
   disabledBtn: { opacity: 0.4 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },
-  emptyText: { color: Colors.textSecondary, textAlign: 'center', padding: 20 },
+  emptyText: { color: Colors.textSecondary, fontFamily: Fonts.bodyRegular, textAlign: 'center', padding: 20 },
   // Form
   formWrap: { flex: 1, padding: 16, justifyContent: 'center', alignItems: 'center' },
   formCard: {
     width: '100%', maxWidth: 500, backgroundColor: Colors.surface, borderRadius: 12,
     padding: 24, borderWidth: 1, borderColor: Colors.border,
   },
-  formLabel: { fontSize: 14, fontWeight: '600', color: Colors.textPrimary, marginBottom: 8, marginTop: 12 },
+  formLabel: { fontSize: 14, fontFamily: Fonts.bodySemiBold, color: Colors.textPrimary, marginBottom: 8, marginTop: 12 },
   input: {
     backgroundColor: Colors.background, borderWidth: 1, borderColor: Colors.border,
     borderRadius: 8, padding: 12, fontSize: 16, color: Colors.textPrimary,
@@ -482,17 +483,17 @@ const styles = StyleSheet.create({
     flex: 1, padding: 14, borderRadius: 8, borderWidth: 1,
     borderColor: Colors.border, alignItems: 'center',
   },
-  cancelBtnText: { color: Colors.textPrimary, fontWeight: '600' },
+  cancelBtnText: { color: Colors.textPrimary, fontFamily: Fonts.bodySemiBold },
   saveBtn: { flex: 1, padding: 14, borderRadius: 8, backgroundColor: Colors.primary, alignItems: 'center' },
-  saveBtnText: { color: Colors.white, fontWeight: '600' },
+  saveBtnText: { color: Colors.white, fontFamily: Fonts.bodySemiBold },
   // Modal
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
+  overlay: { flex: 1, backgroundColor: Colors.overlayMedium, justifyContent: 'center', alignItems: 'center' },
   modal: {
     backgroundColor: Colors.surface, borderRadius: 12, padding: 24, width: '85%',
     borderWidth: 1, borderColor: Colors.danger,
   },
-  modalTitle: { fontSize: 20, fontWeight: 'bold', color: Colors.danger, marginBottom: 8 },
-  modalSub: { color: Colors.textSecondary, marginBottom: 20, lineHeight: 20 },
+  modalTitle: { fontSize: 20, fontFamily: Fonts.bodyBold, color: Colors.danger, marginBottom: 8 },
+  modalSub: { color: Colors.textSecondary, fontFamily: Fonts.bodyRegular, marginBottom: 20, lineHeight: 20 },
   modalBtns: { flexDirection: 'row', gap: 12 },
   // Alias styles
   aliasAddBtn: {
@@ -504,6 +505,6 @@ const styles = StyleSheet.create({
     flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.surfaceSecondary,
     borderRadius: 16, paddingHorizontal: 12, paddingVertical: 6,
   },
-  aliasChipText: { color: Colors.textPrimary, fontSize: 14, marginRight: 8 },
-  aliasChipRemove: { color: Colors.danger, fontWeight: 'bold', fontSize: 14 },
+  aliasChipText: { color: Colors.textPrimary, fontFamily: Fonts.bodyRegular, fontSize: 14, marginRight: 8 },
+  aliasChipRemove: { color: Colors.danger, fontFamily: Fonts.bodyBold, fontSize: 14 },
 });

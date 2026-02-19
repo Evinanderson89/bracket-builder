@@ -4,6 +4,8 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '../context/AuthContext';
 import { useApp } from '../context/AppContext';
 import { Colors } from '../styles/colors';
+import { Fonts } from '../styles/fonts';
+import { getProgressionTier, TierStyles } from '../styles/progression';
 import NavigationHeader from '../components/NavigationHeader';
 
 export default function UserBracketsScreen() {
@@ -18,6 +20,11 @@ export default function UserBracketsScreen() {
       u.name.toLowerCase() === user.name.toLowerCase()
     );
   }, [users, user]);
+
+  const tier = useMemo(() => {
+    if (!profile) return TierStyles.matte;
+    return TierStyles[getProgressionTier(profile.average)];
+  }, [profile]);
 
   const userBrackets = useMemo(() => {
     if (!profile) return [];
@@ -50,6 +57,15 @@ export default function UserBracketsScreen() {
   return (
     <SafeAreaView style={styles.container}>
       <NavigationHeader title="My Brackets" />
+      {profile && (
+        <View style={styles.tierBar}>
+          <View style={[styles.tierIndicator, { borderColor: tier.borderColor, backgroundColor: `${tier.borderColor}20` }]}>
+            <Text style={[styles.tierText, { color: tier.accentColor }]}>
+              {getProgressionTier(profile.average).toUpperCase()} TIER
+            </Text>
+          </View>
+        </View>
+      )}
       <ScrollView style={styles.scroll}>
         {userBrackets.length === 0 ? (
           <View style={styles.center}>
@@ -60,10 +76,10 @@ export default function UserBracketsScreen() {
           </View>
         ) : userBrackets.map(({ bracket, cohort, isActive, isEliminated }) => (
           <TouchableOpacity key={bracket.id}
-            style={[styles.card, !isActive && styles.cardDone, isEliminated && styles.cardElim]}
+            style={[styles.card, { borderColor: tier.borderColor, borderWidth: tier.borderWidth }, !isActive && styles.cardDone, isEliminated && styles.cardElim]}
             onPress={() => router.push({ pathname: '/bracket-edit' as any, params: { bracketId: bracket.id, cohortId: cohort?.id } })}>
             <View style={styles.cardHeader}>
-              <Text style={styles.cardTitle}>{cohort?.name || 'Unknown'}</Text>
+              <Text style={[styles.cardTitle, { color: tier.scoreColor }]}>{cohort?.name || 'Unknown'}</Text>
               <View style={[
                 styles.badge,
                 isActive && !isEliminated && styles.badgeActive,
@@ -93,21 +109,40 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   scroll: { flex: 1 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32, marginTop: 60 },
-  emptyText: { fontSize: 16, color: Colors.textSecondary, textAlign: 'center', marginBottom: 24 },
+  emptyText: { fontSize: 16, color: Colors.textSecondary, textAlign: 'center', marginBottom: 24, fontFamily: Fonts.bodyRegular },
   enterBtn: { backgroundColor: Colors.primary, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 8 },
-  enterBtnText: { color: Colors.white, fontWeight: '600' },
+  enterBtnText: { color: Colors.white, fontFamily: Fonts.bodySemiBold },
   card: { backgroundColor: Colors.surface, margin: 16, marginBottom: 0, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: Colors.border },
   cardDone: { opacity: 0.7 },
   cardElim: { borderColor: Colors.danger, opacity: 0.6 },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  cardTitle: { fontSize: 18, fontWeight: 'bold', color: Colors.white, flex: 1 },
+  cardTitle: { fontSize: 18, fontFamily: Fonts.bodySemiBold, color: Colors.white, flex: 1 },
   badge: { paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12 },
-  badgeActive: { backgroundColor: 'rgba(59,130,246,0.2)' },
-  badgeElim: { backgroundColor: 'rgba(239,68,68,0.2)' },
-  badgeDone: { backgroundColor: 'rgba(16,185,129,0.2)' },
-  badgeText: { fontSize: 12, fontWeight: 'bold', color: Colors.white },
-  cardInfo: { fontSize: 14, color: Colors.textSecondary, marginBottom: 8 },
+  badgeActive: { backgroundColor: Colors.badgeActiveBg },
+  badgeElim: { backgroundColor: Colors.badgeDangerBg },
+  badgeDone: { backgroundColor: Colors.badgeSuccessBg },
+  badgeText: { fontSize: 12, fontFamily: Fonts.bodySemiBold, color: Colors.white },
+  cardInfo: { fontSize: 14, color: Colors.textSecondary, marginBottom: 8, fontFamily: Fonts.bodyRegular },
   winnerInfo: { flexDirection: 'row', marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: Colors.border },
-  winnerLabel: { fontSize: 14, color: Colors.textSecondary },
-  winnerName: { fontSize: 14, fontWeight: 'bold', color: Colors.accent },
+  winnerLabel: { fontSize: 14, color: Colors.textSecondary, fontFamily: Fonts.bodyRegular },
+  winnerName: { fontSize: 14, fontFamily: Fonts.bodySemiBold, color: Colors.accent },
+  tierBar: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    paddingVertical: 8,
+    backgroundColor: Colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+  },
+  tierIndicator: {
+    paddingHorizontal: 14,
+    paddingVertical: 4,
+    borderRadius: 999,
+    borderWidth: 1,
+  },
+  tierText: {
+    fontSize: 10,
+    fontFamily: Fonts.bodySemiBold,
+    letterSpacing: 1.5,
+  },
 });

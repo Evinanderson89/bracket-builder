@@ -14,7 +14,10 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '../context/AuthContext';
 import { useApp } from '../context/AppContext';
 import { Colors } from '../styles/colors';
+import { Fonts } from '../styles/fonts';
+import { getProgressionTier, TierStyles } from '../styles/progression';
 import NavigationHeader from '../components/NavigationHeader';
+import WoodCard from '../components/WoodCard';
 import { CohortStatus, PayoutAmounts, TournamentKind } from '../utils/types';
 import type { Bracket, Player } from '../utils/types';
 
@@ -44,6 +47,11 @@ export default function UserDashboard() {
       setPlayerRecord(found ?? null);
     }
   }, [user, users]);
+
+  const tier = useMemo(() => {
+    if (!playerRecord) return TierStyles.matte;
+    return TierStyles[getProgressionTier(playerRecord.average)];
+  }, [playerRecord]);
 
   const pendingRequest = user
     ? playerRequests.find(r => r.email.toLowerCase() === user.email.toLowerCase() && r.status === 'pending')
@@ -200,9 +208,16 @@ export default function UserDashboard() {
       <View style={styles.bgOrbAccent} />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.welcomeCard}>
+        <WoodCard variant="elevated" style={[styles.welcomeCard, { borderColor: tier.borderColor, borderWidth: tier.borderWidth }]} padding={18} grainOpacity={tier.grainOpacity}>
           <Text style={styles.welcomeTag}>PLAYER SPACE</Text>
-          <Text style={styles.userName}>{user.name}</Text>
+          <Text style={[styles.userName, { color: tier.scoreColor }]}>{user.name}</Text>
+          {playerRecord && (
+            <View style={[styles.tierBadge, { borderColor: tier.borderColor }]}>
+              <Text style={[styles.tierBadgeText, { color: tier.accentColor }]}>
+                {getProgressionTier(playerRecord.average).toUpperCase()}
+              </Text>
+            </View>
+          )}
 
           {!playerRecord ? (
             <View style={styles.requestWrap}>
@@ -219,15 +234,15 @@ export default function UserDashboard() {
             </View>
           ) : (
             <View style={styles.quickStatsRow}>
-              <View style={styles.quickStatPill}>
+              <View style={[styles.quickStatPill, { borderColor: tier.borderColor }]}>
                 <Text style={styles.quickStatValue}>{participation?.activeBracketCount ?? 0}</Text>
                 <Text style={styles.quickStatLabel}>Active Brackets</Text>
               </View>
-              <View style={styles.quickStatPill}>
+              <View style={[styles.quickStatPill, { borderColor: tier.borderColor }]}>
                 <Text style={styles.quickStatValue}>{participation?.upcomingCount ?? 0}</Text>
                 <Text style={styles.quickStatLabel}>Upcoming</Text>
               </View>
-              <View style={styles.quickStatPill}>
+              <View style={[styles.quickStatPill, { borderColor: tier.borderColor }]}>
                 <Text style={[styles.quickStatValue, { color: (participation?.net ?? 0) >= 0 ? Colors.success : Colors.danger }]}>
                   {(participation?.net ?? 0) >= 0 ? '+' : ''}${participation?.net ?? 0}
                 </Text>
@@ -235,9 +250,9 @@ export default function UserDashboard() {
               </View>
             </View>
           )}
-        </View>
+        </WoodCard>
 
-        <View style={styles.sectionCard}>
+        <WoodCard style={styles.sectionCard}>
           <TouchableOpacity
             style={styles.sectionHeader}
             onPress={() => setTournamentsOpen(prev => !prev)}
@@ -302,24 +317,24 @@ export default function UserDashboard() {
               )}
             </View>
           )}
-        </View>
+        </WoodCard>
 
-        <View style={styles.sectionCard}>
+        <WoodCard style={styles.sectionCard}>
           <Text style={styles.sectionTitle}>Participation Snapshot</Text>
           {!playerRecord ? (
             <Text style={[styles.emptyBodyText, { marginTop: 10 }]}>Metrics appear after your player access is approved.</Text>
           ) : (
             <View style={styles.snapshotGrid}>
               <View style={styles.snapshotCard}>
-                <Text style={styles.snapshotValue}>{participation?.entries ?? 0}</Text>
+                <Text style={[styles.snapshotValue, { color: tier.scoreColor }]}>{participation?.entries ?? 0}</Text>
                 <Text style={styles.snapshotLabel}>Total Entries</Text>
               </View>
               <View style={styles.snapshotCard}>
-                <Text style={styles.snapshotValue}>{participation?.wins ?? 0}</Text>
+                <Text style={[styles.snapshotValue, { color: tier.scoreColor }]}>{participation?.wins ?? 0}</Text>
                 <Text style={styles.snapshotLabel}>Bracket Wins</Text>
               </View>
               <View style={styles.snapshotCard}>
-                <Text style={styles.snapshotValue}>{participation?.completedBracketCount ?? 0}</Text>
+                <Text style={[styles.snapshotValue, { color: tier.scoreColor }]}>{participation?.completedBracketCount ?? 0}</Text>
                 <Text style={styles.snapshotLabel}>Completed</Text>
               </View>
               <View style={styles.snapshotCard}>
@@ -330,7 +345,7 @@ export default function UserDashboard() {
               </View>
             </View>
           )}
-        </View>
+        </WoodCard>
 
         <View style={styles.footer}>
           <TouchableOpacity style={styles.signOutBtn} onPress={signOut} activeOpacity={0.85}>
@@ -373,15 +388,10 @@ const styles = StyleSheet.create({
   },
   content: { padding: 18, paddingBottom: 26 },
   welcomeCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: 20,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    padding: 18,
     marginBottom: 12,
   },
-  welcomeTag: { color: Colors.primary, fontSize: 12, fontWeight: '800', letterSpacing: 1.1 },
-  userName: { color: Colors.textPrimary, fontSize: 30, lineHeight: 35, fontWeight: '800', marginTop: 2 },
+  welcomeTag: { color: Colors.primary, fontSize: 12, fontFamily: Fonts.bodyBold, letterSpacing: 1.1 },
+  userName: { color: Colors.textPrimary, fontSize: 30, lineHeight: 35, fontFamily: Fonts.scoreBold, marginTop: 2 },
   requestWrap: { marginTop: 14, alignItems: 'flex-start' },
   createBtn: {
     backgroundColor: Colors.warning,
@@ -389,12 +399,12 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     borderRadius: 999,
   },
-  createBtnText: { color: Colors.headerDark, fontWeight: '800', fontSize: 12, letterSpacing: 0.35 },
+  createBtnText: { color: Colors.headerDark, fontFamily: Fonts.bodyBold, fontSize: 12, letterSpacing: 0.35 },
   pendingText: {
     color: Colors.warning,
-    fontWeight: '800',
+    fontFamily: Fonts.bodyBold,
     fontSize: 12,
-    backgroundColor: 'rgba(245,158,11,0.15)',
+    backgroundColor: Colors.badgeWarningBg,
     paddingHorizontal: 12,
     paddingVertical: 6,
     borderRadius: 999,
@@ -415,14 +425,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 8,
   },
-  quickStatValue: { color: Colors.textPrimary, fontWeight: '800', fontSize: 17 },
-  quickStatLabel: { color: Colors.textSecondary, fontSize: 11, marginTop: 2 },
+  quickStatValue: { color: Colors.textPrimary, fontFamily: Fonts.scoreBold, fontSize: 17 },
+  quickStatLabel: { color: Colors.textSecondary, fontSize: 11, marginTop: 2, fontFamily: Fonts.bodyRegular },
   sectionCard: {
-    backgroundColor: Colors.surface,
-    borderRadius: 16,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    padding: 14,
     marginTop: 10,
   },
   sectionHeader: {
@@ -437,9 +442,9 @@ const styles = StyleSheet.create({
     borderRadius: 28,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: `${Colors.primary}22`,
+    backgroundColor: Colors.primaryTint,
     borderWidth: 1,
-    borderColor: `${Colors.primary}55`,
+    borderColor: Colors.badgeWarningBorder,
     marginRight: 8,
   },
   sectionHeaderRight: { flexDirection: 'row', alignItems: 'center' },
@@ -454,10 +459,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     marginRight: 6,
   },
-  countPillText: { color: Colors.textPrimary, fontSize: 11, fontWeight: '700' },
-  sectionTitle: { color: Colors.textPrimary, fontSize: 17, fontWeight: '800' },
+  countPillText: { color: Colors.textPrimary, fontSize: 11, fontFamily: Fonts.bodySemiBold },
+  sectionTitle: { color: Colors.textPrimary, fontSize: 17, fontFamily: Fonts.bodyBold },
   sectionBody: { marginTop: 10 },
-  emptyBodyText: { color: Colors.textSecondary, fontSize: 13, lineHeight: 18 },
+  emptyBodyText: { color: Colors.textSecondary, fontSize: 13, lineHeight: 18, fontFamily: Fonts.bodyRegular },
   tournamentRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -468,10 +473,10 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     backgroundColor: Colors.surfaceSecondary,
   },
-  tournamentName: { color: Colors.textPrimary, fontSize: 14, fontWeight: '700' },
-  tournamentMeta: { color: Colors.textSecondary, fontSize: 12, marginTop: 2 },
+  tournamentName: { color: Colors.textPrimary, fontSize: 14, fontFamily: Fonts.bodySemiBold },
+  tournamentMeta: { color: Colors.textSecondary, fontSize: 12, marginTop: 2, fontFamily: Fonts.bodyRegular },
   tournamentStats: { alignItems: 'flex-end' },
-  tournamentStat: { color: Colors.textSecondary, fontSize: 11, marginVertical: 1 },
+  tournamentStat: { color: Colors.textSecondary, fontSize: 11, marginVertical: 1, fontFamily: Fonts.bodyRegular },
   inlineAction: {
     marginTop: 8,
     alignSelf: 'flex-start',
@@ -482,7 +487,7 @@ const styles = StyleSheet.create({
     borderColor: Colors.borderLight,
     backgroundColor: Colors.surfaceSecondary,
   },
-  inlineActionText: { color: Colors.textPrimary, fontSize: 12, fontWeight: '700' },
+  inlineActionText: { color: Colors.textPrimary, fontSize: 12, fontFamily: Fonts.bodySemiBold },
   snapshotGrid: {
     marginTop: 12,
     flexDirection: 'row',
@@ -499,8 +504,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     marginBottom: 8,
   },
-  snapshotValue: { color: Colors.textPrimary, fontSize: 19, fontWeight: '800' },
-  snapshotLabel: { color: Colors.textSecondary, fontSize: 11, marginTop: 3 },
+  snapshotValue: { color: Colors.textPrimary, fontSize: 19, fontFamily: Fonts.scoreBold },
+  snapshotLabel: { color: Colors.textSecondary, fontSize: 11, marginTop: 3, fontFamily: Fonts.bodyRegular },
   navbar: {
     flexDirection: 'row',
     backgroundColor: Colors.surface,
@@ -516,7 +521,7 @@ const styles = StyleSheet.create({
   },
   navLabel: {
     fontSize: 10,
-    fontWeight: '700',
+    fontFamily: Fonts.bodySemiBold,
     color: Colors.textSecondary,
     marginTop: 3,
     letterSpacing: 0.3,
@@ -524,22 +529,36 @@ const styles = StyleSheet.create({
   },
   footer: { marginTop: 16, alignItems: 'center' },
   signOutBtn: {
-    backgroundColor: 'rgba(251,113,133,0.14)',
+    backgroundColor: Colors.badgeDangerBg,
     borderRadius: 999,
     borderWidth: 1,
-    borderColor: 'rgba(251,113,133,0.52)',
+    borderColor: Colors.badgeDangerBorder,
     paddingHorizontal: 16,
     paddingVertical: 8,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
   },
-  signOutText: { color: Colors.danger, fontWeight: '800' },
+  signOutText: { color: Colors.danger, fontFamily: Fonts.bodyBold },
   adminLinkWrap: {
     marginTop: 10,
     flexDirection: 'row',
     alignItems: 'center',
     paddingVertical: 6,
   },
-  adminLink: { color: Colors.textSecondary, fontSize: 12, textDecorationLine: 'underline' },
+  adminLink: { color: Colors.textSecondary, fontSize: 12, textDecorationLine: 'underline', fontFamily: Fonts.bodyRegular },
+  tierBadge: {
+    alignSelf: 'flex-start',
+    marginTop: 6,
+    paddingHorizontal: 10,
+    paddingVertical: 3,
+    borderRadius: 999,
+    borderWidth: 1,
+    backgroundColor: Colors.surfaceSecondary,
+  },
+  tierBadgeText: {
+    fontSize: 10,
+    fontFamily: Fonts.bodySemiBold,
+    letterSpacing: 1.2,
+  },
 });

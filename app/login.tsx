@@ -20,6 +20,7 @@ import { makeRedirectUri } from 'expo-auth-session';
 import { useAuth } from '../context/AuthContext';
 import { useApp } from '../context/AppContext';
 import { Colors } from '../styles/colors';
+import { Fonts } from '../styles/fonts';
 
 WebBrowser.maybeCompleteAuthSession();
 
@@ -268,9 +269,9 @@ const styles = StyleSheet.create({
     elevation: 8,
     padding: 18,
   },
-  eyebrow: { color: Colors.primary, fontSize: 12, fontWeight: '800', letterSpacing: 1.2, marginBottom: 7 },
-  title: { color: Colors.white, fontSize: 26, lineHeight: 31, fontWeight: '800' },
-  subtitle: { color: Colors.textSecondary, fontSize: 13, lineHeight: 18, marginTop: 6 },
+  eyebrow: { color: Colors.primary, fontSize: 12, fontFamily: Fonts.bodyBold, letterSpacing: 1.2, marginBottom: 7 },
+  title: { color: Colors.white, fontSize: 26, lineHeight: 31, fontFamily: Fonts.bodyBold },
+  subtitle: { color: Colors.textSecondary, fontSize: 13, lineHeight: 18, marginTop: 6, fontFamily: Fonts.bodyRegular },
   form: {
     width: '100%',
     maxWidth: 640,
@@ -293,16 +294,16 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.border,
     borderBottomWidth: 1,
   },
-  formHeaderText: { color: Colors.textPrimary, fontWeight: '700', fontSize: 14, marginLeft: 7 },
+  formHeaderText: { color: Colors.textPrimary, fontFamily: Fonts.bodySemiBold, fontSize: 14, marginLeft: 7 },
   label: {
     fontSize: 12,
-    fontWeight: '700',
+    fontFamily: Fonts.bodySemiBold,
     color: Colors.textSecondary,
     marginBottom: 8,
     marginTop: 16,
     letterSpacing: 0.5,
   },
-  helperText: { fontSize: 12, color: Colors.textSecondary, marginTop: 8, lineHeight: 18 },
+  helperText: { fontSize: 12, color: Colors.textSecondary, marginTop: 8, lineHeight: 18, fontFamily: Fonts.bodyRegular },
   input: {
     backgroundColor: Colors.tabBar,
     borderWidth: 1,
@@ -324,7 +325,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   googleButton: {
-    backgroundColor: Platform.OS === 'web' ? '#0f62fe' : '#1f6feb',
+    backgroundColor: Platform.OS === 'web' ? Colors.googleBlue : Colors.googleBlueMobile,
     marginTop: 0,
   },
   adminButton: { backgroundColor: Colors.accent },
@@ -343,8 +344,8 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     fontSize: 12,
     textDecorationLine: 'underline',
-    fontWeight: '600',
+    fontFamily: Fonts.bodySemiBold,
   },
   disabled: { opacity: 0.6 },
-  buttonText: { color: Colors.white, fontSize: 15, fontWeight: '700', letterSpacing: 0.2 },
+  buttonText: { color: Colors.white, fontSize: 15, fontFamily: Fonts.bodySemiBold, letterSpacing: 0.2 },
 });

@@ -13,6 +13,7 @@ import {
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { Colors } from '../styles/colors';
+import { Fonts } from '../styles/fonts';
 import { summarizeBowlingCenters } from '../utils/bowlingCenters';
 import NavigationHeader from '../components/NavigationHeader';
 import { CohortStatus } from '../utils/types';
@@ -185,7 +186,7 @@ export default function UserEntryScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   scroll: { padding: 16 },
-  sectionTitle: { color: Colors.white, fontSize: 18, fontWeight: 'bold', marginBottom: 16 },
+  sectionTitle: { color: Colors.white, fontSize: 18, fontFamily: Fonts.bodyBold, marginBottom: 16 },
   card: {
     backgroundColor: Colors.surface,
     padding: 16,
@@ -197,18 +198,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   cardInfo: { flex: 1 },
-  cardTitle: { color: Colors.white, fontSize: 16, fontWeight: 'bold', marginBottom: 4 },
-  cardDetail: { color: Colors.textSecondary, fontSize: 12 },
-  cardCenter: { color: Colors.info, fontSize: 12, marginTop: 4, fontWeight: '700' },
-  cardDescription: { color: Colors.textPrimary, fontSize: 12, lineHeight: 17, marginTop: 8 },
-  paidBadge: { color: Colors.success, fontSize: 12, marginTop: 6, fontWeight: 'bold' },
-  pendingBadge: { color: Colors.warning, fontSize: 12, marginTop: 4, fontWeight: 'bold' },
+  cardTitle: { color: Colors.white, fontSize: 16, fontFamily: Fonts.bodySemiBold, marginBottom: 4 },
+  cardDetail: { color: Colors.textSecondary, fontSize: 12, fontFamily: Fonts.bodyRegular },
+  cardCenter: { color: Colors.info, fontSize: 12, marginTop: 4, fontFamily: Fonts.bodySemiBold },
+  cardDescription: { color: Colors.textPrimary, fontSize: 12, lineHeight: 17, marginTop: 8, fontFamily: Fonts.bodyRegular },
+  paidBadge: { color: Colors.success, fontSize: 12, marginTop: 6, fontFamily: Fonts.bodySemiBold },
+  pendingBadge: { color: Colors.warning, fontSize: 12, marginTop: 4, fontFamily: Fonts.bodySemiBold },
   joinBtn: { backgroundColor: Colors.primary, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 8 },
-  joinBtnText: { color: Colors.white, fontWeight: 'bold', fontSize: 12 },
+  joinBtnText: { color: Colors.white, fontFamily: Fonts.bodyBold, fontSize: 12 },
   empty: { alignItems: 'center', marginTop: 60 },
-  emptyText: { color: Colors.white, fontSize: 16, fontWeight: 'bold' },
-  emptySub: { color: Colors.textSecondary, fontSize: 14 },
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
+  emptyText: { color: Colors.white, fontSize: 16, fontFamily: Fonts.bodyBold },
+  emptySub: { color: Colors.textSecondary, fontSize: 14, fontFamily: Fonts.bodyRegular },
+  overlay: { flex: 1, backgroundColor: Colors.overlayMedium, justifyContent: 'center', alignItems: 'center' },
   modalContent: {
     backgroundColor: Colors.surface,
     width: '85%',
@@ -217,9 +218,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
   },
-  modalTitle: { color: Colors.white, fontSize: 20, fontWeight: 'bold', marginBottom: 8, textAlign: 'center' },
-  modalSub: { color: Colors.textSecondary, textAlign: 'center', marginBottom: 4 },
-  costInfo: { color: Colors.primary, textAlign: 'center', marginBottom: 20, fontWeight: 'bold', fontSize: 12 },
+  modalTitle: { color: Colors.white, fontSize: 20, fontFamily: Fonts.bodyBold, marginBottom: 8, textAlign: 'center' },
+  modalSub: { color: Colors.textSecondary, textAlign: 'center', marginBottom: 4, fontFamily: Fonts.bodyRegular },
+  costInfo: { color: Colors.primary, textAlign: 'center', marginBottom: 20, fontFamily: Fonts.bodySemiBold, fontSize: 12 },
   inputWrap: { alignItems: 'center', marginBottom: 24 },
   input: {
     backgroundColor: Colors.background,
@@ -230,11 +231,11 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
     color: Colors.white,
     fontSize: 24,
-    fontWeight: 'bold',
+    fontFamily: Fonts.scoreBold,
     textAlign: 'center',
     marginBottom: 8,
   },
-  totalText: { color: Colors.white, fontWeight: 'bold' },
+  totalText: { color: Colors.white, fontFamily: Fonts.scoreBold },
   modalBtns: { flexDirection: 'row', gap: 12 },
   cancelBtn: {
     flex: 1,
@@ -245,7 +246,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
   },
-  cancelText: { color: Colors.textSecondary, fontWeight: 'bold' },
+  cancelText: { color: Colors.textSecondary, fontFamily: Fonts.bodyBold },
   confirmBtn: { flex: 1, padding: 14, borderRadius: 8, backgroundColor: Colors.success, alignItems: 'center' },
-  confirmText: { color: Colors.white, fontWeight: 'bold' },
+  confirmText: { color: Colors.white, fontFamily: Fonts.bodyBold },
 });
