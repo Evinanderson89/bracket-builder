@@ -16,6 +16,7 @@ import { Ionicons } from '@expo/vector-icons';
 import { useRouter } from 'expo-router';
 import * as WebBrowser from 'expo-web-browser';
 import * as Google from 'expo-auth-session/providers/google';
+import { makeRedirectUri } from 'expo-auth-session';
 import { useAuth } from '../context/AuthContext';
 import { useApp } from '../context/AppContext';
 import { Colors } from '../styles/colors';
@@ -38,11 +39,22 @@ export default function LoginScreen() {
     webClientId: process.env.EXPO_PUBLIC_GOOGLE_WEB_CLIENT_ID,
   }), []);
 
+  const redirectUri = useMemo(
+    () =>
+      makeRedirectUri({
+        // On web this resolves to the current origin (e.g. https://bracket-builder-omega.vercel.app)
+        // which is exactly where the popup needs to redirect back to.
+        path: 'login',
+      }),
+    []
+  );
+
   const [request, response, promptAsync] = Google.useAuthRequest({
     expoClientId: googleConfig.expoClientId || '__missing_expo_client_id__',
     iosClientId: googleConfig.iosClientId || '__missing_ios_client_id__',
     androidClientId: googleConfig.androidClientId || '__missing_android_client_id__',
     webClientId: googleConfig.webClientId || '__missing_web_client_id__',
+    redirectUri,
     scopes: ['openid', 'profile', 'email'],
   });
 
