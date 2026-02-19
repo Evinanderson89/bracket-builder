@@ -18,8 +18,6 @@ import NavigationHeader from '../components/NavigationHeader';
 import { CohortStatus, PayoutAmounts, TournamentKind } from '../utils/types';
 import type { Bracket, Player } from '../utils/types';
 
-type UtilityKey = 'entry' | 'brackets' | 'scores' | 'stats' | 'profile';
-
 function isPlayerEliminated(bracket: Bracket, playerId: string) {
   return bracket.structure.rounds.some(round => (
     round.some(match => (
@@ -36,7 +34,6 @@ export default function UserDashboard() {
   const { users, playerRequests, requestPlayerAccess, brackets, cohorts, payouts } = useApp();
   const [playerRecord, setPlayerRecord] = useState<Player | null>(null);
   const [tournamentsOpen, setTournamentsOpen] = useState(true);
-  const [openUtility, setOpenUtility] = useState<UtilityKey | null>('entry');
 
   useEffect(() => {
     if (user && users.length > 0) {
@@ -147,10 +144,6 @@ export default function UserDashboard() {
     };
   }, [cohorts, myBrackets, payouts, playerRecord]);
 
-  const openTournamentCount = useMemo(() => {
-    return cohorts.filter(c => c.status === CohortStatus.NOT_DEPLOYED).length;
-  }, [cohorts]);
-
   const scoreEntryCohorts = useMemo(() => {
     if (!user) return [];
     const playerId = playerRecord?.id || null;
@@ -171,55 +164,15 @@ export default function UserDashboard() {
     });
   }, [cohorts, playerRecord?.id, user]);
 
-  const utilityItems = useMemo(() => ([
-    {
-      key: 'entry' as const,
-      label: 'Enter',
-      icon: 'rocket-outline' as const,
-      route: '/user-entry',
-      meta: `${openTournamentCount} open tournaments`,
-      description: 'Join upcoming tournaments and choose how many brackets you want to enter.',
-      cta: 'Open Entry',
-    },
-    {
-      key: 'brackets' as const,
-      label: 'Brackets',
-      icon: 'git-network-outline' as const,
-      route: '/user-brackets',
-      meta: `${myBrackets.length} total entries`,
-      description: 'See all your active and completed brackets in one place.',
-      cta: 'Open My Brackets',
-    },
-    ...(scoreEntryCohorts.length > 0 ? [{
-      key: 'scores' as const,
-      label: 'Scores',
-      icon: 'clipboard-outline' as const,
-      route: '/game-entry',
-      meta: `${scoreEntryCohorts.length} tournament${scoreEntryCohorts.length === 1 ? '' : 's'} assigned`,
-      description: 'Enter and update game scores for tournaments where you have score-entry rights.',
-      cta: 'Open Score Entry',
-    }] : []),
-    {
-      key: 'stats' as const,
-      label: 'Stats',
-      icon: 'stats-chart-outline' as const,
-      route: '/user-stats',
-      meta: `${participation?.wins ?? 0} bracket wins`,
-      description: 'Review your performance, ROI, and daily payout history.',
-      cta: 'Open My Stats',
-    },
-    {
-      key: 'profile' as const,
-      label: 'Profile',
-      icon: 'person-circle-outline' as const,
-      route: '/user-profile',
-      meta: user?.email || 'Player account settings',
-      description: 'Update account details and keep your player profile current.',
-      cta: 'Open Profile',
-    },
-  ]), [myBrackets.length, openTournamentCount, participation?.wins, scoreEntryCohorts.length, user?.email]);
-
-  const selectedUtility = utilityItems.find(item => item.key === openUtility) || null;
+  const navItems = useMemo(() => ([
+    { key: 'entry', label: 'Enter', icon: 'rocket-outline' as const, route: '/user-entry' },
+    { key: 'brackets', label: 'Brackets', icon: 'git-network-outline' as const, route: '/user-brackets' },
+    ...(scoreEntryCohorts.length > 0
+      ? [{ key: 'scores', label: 'Scores', icon: 'clipboard-outline' as const, route: '/game-entry' }]
+      : []),
+    { key: 'stats', label: 'Stats', icon: 'stats-chart-outline' as const, route: '/user-stats' },
+    { key: 'profile', label: 'Profile', icon: 'person-circle-outline' as const, route: '/user-profile' },
+  ]), [scoreEntryCohorts.length]);
 
   if (!user) return null;
 
@@ -227,6 +180,21 @@ export default function UserDashboard() {
     <SafeAreaView style={styles.container}>
       <StatusBar barStyle="light-content" backgroundColor={Colors.headerDark} />
       <NavigationHeader title="Player Dashboard" showBack={false} />
+
+      {/* ── Enterprise-style top navbar ── */}
+      <View style={styles.navbar}>
+        {navItems.map(item => (
+          <TouchableOpacity
+            key={item.key}
+            style={styles.navItem}
+            onPress={() => router.push(item.route as any)}
+            activeOpacity={0.75}
+          >
+            <Ionicons name={item.icon} size={18} color={Colors.textSecondary} />
+            <Text style={styles.navLabel}>{item.label}</Text>
+          </TouchableOpacity>
+        ))}
+      </View>
 
       <View style={styles.bgOrbPrimary} />
       <View style={styles.bgOrbAccent} />
@@ -360,47 +328,6 @@ export default function UserDashboard() {
                 </Text>
                 <Text style={styles.snapshotLabel}>Net Position</Text>
               </View>
-            </View>
-          )}
-        </View>
-
-        <View style={styles.sectionCard}>
-          <Text style={styles.sectionTitle}>Utility Bar</Text>
-          <View style={styles.utilityBar}>
-            {utilityItems.map(item => {
-              const isActive = openUtility === item.key;
-              return (
-                <TouchableOpacity
-                  key={item.key}
-                  style={[styles.utilityTab, isActive && styles.utilityTabActive]}
-                  onPress={() => setOpenUtility(prev => (prev === item.key ? null : item.key))}
-                  activeOpacity={0.85}
-                >
-                  <Ionicons name={item.icon} size={14} color={isActive ? Colors.textPrimary : Colors.textSecondary} />
-                  <Text style={[styles.utilityTabText, isActive && styles.utilityTabTextActive]}>{item.label}</Text>
-                  <Ionicons
-                    name={isActive ? 'chevron-up' : 'chevron-down'}
-                    size={12}
-                    color={isActive ? Colors.textPrimary : Colors.textSecondary}
-                  />
-                </TouchableOpacity>
-              );
-            })}
-          </View>
-
-          {selectedUtility && (
-            <View style={styles.utilityDrawer}>
-              <Text style={styles.utilityTitle}>{selectedUtility.label}</Text>
-              <Text style={styles.utilityMeta}>{selectedUtility.meta}</Text>
-              <Text style={styles.utilityDescription}>{selectedUtility.description}</Text>
-              <TouchableOpacity
-                style={styles.utilityActionBtn}
-                onPress={() => router.push(selectedUtility.route as any)}
-                activeOpacity={0.85}
-              >
-                <Text style={styles.utilityActionText}>{selectedUtility.cta}</Text>
-                <Ionicons name="arrow-forward" size={14} color={Colors.textPrimary} />
-              </TouchableOpacity>
             </View>
           )}
         </View>
@@ -574,61 +501,27 @@ const styles = StyleSheet.create({
   },
   snapshotValue: { color: Colors.textPrimary, fontSize: 19, fontWeight: '800' },
   snapshotLabel: { color: Colors.textSecondary, fontSize: 11, marginTop: 3 },
-  utilityBar: {
-    marginTop: 10,
+  navbar: {
     flexDirection: 'row',
-    flexWrap: 'wrap',
-    justifyContent: 'space-between',
+    backgroundColor: Colors.surface,
+    borderBottomWidth: 1,
+    borderBottomColor: Colors.border,
+    paddingVertical: 2,
   },
-  utilityTab: {
-    width: '48.5%',
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surfaceSecondary,
-    paddingVertical: 10,
-    paddingHorizontal: 10,
-    marginBottom: 8,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  utilityTabActive: {
-    borderColor: Colors.primary,
-    backgroundColor: `${Colors.primary}22`,
-  },
-  utilityTabText: {
-    color: Colors.textSecondary,
-    fontSize: 12,
-    fontWeight: '700',
+  navItem: {
     flex: 1,
-    marginHorizontal: 6,
-  },
-  utilityTabTextActive: { color: Colors.textPrimary },
-  utilityDrawer: {
-    marginTop: 2,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surfaceSecondary,
-    padding: 12,
-  },
-  utilityTitle: { color: Colors.textPrimary, fontWeight: '800', fontSize: 14 },
-  utilityMeta: { color: Colors.primary, fontSize: 12, marginTop: 2, fontWeight: '700' },
-  utilityDescription: { color: Colors.textSecondary, fontSize: 12, lineHeight: 18, marginTop: 6 },
-  utilityActionBtn: {
-    marginTop: 10,
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
     alignItems: 'center',
-    paddingVertical: 8,
-    paddingHorizontal: 12,
-    borderRadius: 999,
-    borderWidth: 1,
-    borderColor: Colors.borderLight,
-    backgroundColor: Colors.tabBar,
+    justifyContent: 'center',
+    paddingVertical: 10,
   },
-  utilityActionText: { color: Colors.textPrimary, fontWeight: '700', marginRight: 6, fontSize: 12 },
+  navLabel: {
+    fontSize: 10,
+    fontWeight: '700',
+    color: Colors.textSecondary,
+    marginTop: 3,
+    letterSpacing: 0.3,
+    textTransform: 'uppercase',
+  },
   footer: { marginTop: 16, alignItems: 'center' },
   signOutBtn: {
     backgroundColor: 'rgba(251,113,133,0.14)',
