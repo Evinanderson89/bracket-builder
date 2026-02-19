@@ -1,13 +1,9 @@
 import React, { createContext, useContext, useState, useEffect, useCallback } from 'react';
 import {
-  getUsers, saveUsers,
-  getCohorts, saveCohorts,
-  getBrackets, saveBrackets,
-  getGames, saveGames,
-  getPayouts, savePayouts,
   getDeletePassword, saveDeletePassword,
-  getPlayerRequests, savePlayerRequests,
+  loadCachedJSON, saveCacheJSON, CACHE_KEYS,
 } from '../utils/storage';
+import * as db from '../utils/db';
 import { createBrackets, createBracketStructure } from '../utils/bracketLogic';
 import { CohortStatus, CohortType, PayoutAmounts, TournamentDescriptionMode, TournamentKind } from '../utils/types';
 import type { Player, Cohort, Bracket, Game, Payout, AuthUser, PlayerRequest, PendingEntryRequest, BowlingCenter } from '../utils/types';
@@ -104,7 +100,7 @@ function normalizeCohort(raw: any): Cohort {
       }))
       .filter((req: PendingEntryRequest) => req.playerId)
     : [];
-  const scoreEntryUserIds = Array.isArray(raw?.scoreEntryUserIds)
+  const scoreEntryUserIds: string[] = Array.isArray(raw?.scoreEntryUserIds)
     ? Array.from(new Set(raw.scoreEntryUserIds.map((id: any) => String(id)).filter(Boolean)))
     : [];
   const centers: BowlingCenter[] = Array.isArray(raw?.centers)
@@ -145,6 +141,26 @@ function normalizeCohort(raw: any): Cohort {
   };
 }
 
+// ─── Helpers ──────────────────────────────────────────────────────────────────
+
+/** Load from cloud, update local cache; fall back to local cache on failure. */
+async function loadWithFallback<T>(
+  fetchFn: () => Promise<T[] | undefined>,
+  cacheKey: string,
+  fallback: T[],
+): Promise<T[]> {
+  try {
+    const cloud = await fetchFn();
+    if (cloud !== undefined) {
+      await saveCacheJSON(cacheKey, cloud);
+      return cloud;
+    }
+  } catch {
+    // fall through to local cache
+  }
+  return loadCachedJSON<T[]>(cacheKey, fallback);
+}
+
 // ─── Provider ────────────────────────────────────────────────────────────────
 
 export function AppProvider({ children }: { children: React.ReactNode }) {
@@ -160,8 +176,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   useEffect(() => {
     (async () => {
       try {
+        // One-time migration from old app_state KV → relational tables
+        await db.migrateFromKvToRelational();
+
+        // Seed test players (idempotent — uses ON CONFLICT DO NOTHING)
+        await db.seedTestPlayers();
+
         const [u, c, b, g, p, pw, reqs] = await Promise.all([
-          getUsers(), getCohorts(), getBrackets(), getGames(), getPayouts(), getDeletePassword(), getPlayerRequests(),
+          loadWithFallback(db.fetchAllPlayers, CACHE_KEYS.USERS, []),
+          loadWithFallback(db.fetchAllCohorts, CACHE_KEYS.COHORTS, []),
+          loadWithFallback(db.fetchAllBrackets, CACHE_KEYS.BRACKETS, []),
+          loadWithFallback(db.fetchAllGames, CACHE_KEYS.GAMES, []),
+          loadWithFallback(db.fetchAllPayouts, CACHE_KEYS.PAYOUTS, []),
+          getDeletePassword(),
+          loadWithFallback(db.fetchAllPlayerRequests, CACHE_KEYS.PLAYER_REQUESTS, []),
         ]);
         const normalizedCohorts = (c || []).map(normalizeCohort);
         setUsers(u);
@@ -171,10 +199,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
         setPayouts(p);
         setDeletePassword(pw);
         setPlayerRequests(reqs);
-
-        if (JSON.stringify(c) !== JSON.stringify(normalizedCohorts)) {
-          await saveCohorts(normalizedCohorts);
-        }
       } catch (e) {
         console.error('Failed to load data:', e);
       } finally {
@@ -196,20 +220,23 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const newUser: Player = { ...user, id: Date.now().toString(), createdAt: new Date().toISOString() };
     const next = [...users, newUser];
     setUsers(next);
-    await saveUsers(next);
+    await db.insertPlayer(newUser);
+    await saveCacheJSON(CACHE_KEYS.USERS, next);
     return newUser;
   }, [users]);
 
   const updateUser = useCallback(async (id: string, updates: Partial<Player>) => {
     const next = users.map(u => (u.id === id ? { ...u, ...updates } : u));
     setUsers(next);
-    await saveUsers(next);
+    await db.updatePlayer(id, updates);
+    await saveCacheJSON(CACHE_KEYS.USERS, next);
   }, [users]);
 
   const deleteUser = useCallback(async (id: string) => {
     const next = users.filter(u => u.id !== id);
     setUsers(next);
-    await saveUsers(next);
+    await db.deletePlayer(id);
+    await saveCacheJSON(CACHE_KEYS.USERS, next);
 
     const nextCohorts = cohorts.map(c => {
       const nextScoreUsers = (c.scoreEntryUserIds || []).filter(uid => uid !== id);
@@ -217,20 +244,33 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       return { ...c, scoreEntryUserIds: nextScoreUsers };
     });
     setCohorts(nextCohorts);
-    await saveCohorts(nextCohorts);
+    for (const c of nextCohorts) {
+      const original = cohorts.find(oc => oc.id === c.id);
+      if (original && original.scoreEntryUserIds.length !== c.scoreEntryUserIds.length) {
+        await db.updateCohort(c.id, { scoreEntryUserIds: c.scoreEntryUserIds });
+      }
+    }
+    await saveCacheJSON(CACHE_KEYS.COHORTS, nextCohorts);
   }, [users, cohorts]);
 
   const removeDuplicateUsers = useCallback(async (): Promise<number> => {
     const seen = new Set<string>();
     const unique: Player[] = [];
+    const toDelete: string[] = [];
     let removed = 0;
     for (const u of users) {
       const key = u.name.trim().toLowerCase();
-      if (seen.has(key)) { removed++; continue; }
+      if (seen.has(key)) { removed++; toDelete.push(u.id); continue; }
       seen.add(key);
       unique.push(u);
     }
-    if (removed > 0) { setUsers(unique); await saveUsers(unique); }
+    if (removed > 0) {
+      setUsers(unique);
+      for (const id of toDelete) {
+        await db.deletePlayer(id);
+      }
+      await saveCacheJSON(CACHE_KEYS.USERS, unique);
+    }
     return removed;
   }, [users]);
 
@@ -238,21 +278,18 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const emailLower = authUser.email.trim().toLowerCase();
     const nameLower = authUser.name.trim().toLowerCase();
 
-    // Check for existing player by email first, then name
     const existing = users.find(u =>
       (u.email && u.email.trim().toLowerCase() === emailLower) ||
       u.name.trim().toLowerCase() === nameLower
     );
 
     if (existing) {
-      // Backfill email if the existing player doesn't have one
       if (!existing.email && authUser.email) {
         await updateUser(existing.id, { email: authUser.email.trim() });
       }
       return existing;
     }
 
-    // Auto-create new player from Google profile
     return addUser({
       name: authUser.name.trim(),
       email: authUser.email.trim(),
@@ -288,7 +325,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     };
     const next = [nextReq, ...playerRequests];
     setPlayerRequests(next);
-    await savePlayerRequests(next);
+    await db.insertPlayerRequest(nextReq);
+    await saveCacheJSON(CACHE_KEYS.PLAYER_REQUESTS, next);
     return nextReq;
   }, [playerRequests, users]);
 
@@ -317,7 +355,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       };
       nextUsers = [...users, newUser];
       setUsers(nextUsers);
-      await saveUsers(nextUsers);
+      await db.insertPlayer(newUser);
+      await saveCacheJSON(CACHE_KEYS.USERS, nextUsers);
     }
 
     const now = new Date().toISOString();
@@ -325,7 +364,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       r.id === requestId ? { ...r, status: 'approved' as const, resolvedAt: now } : r
     ));
     setPlayerRequests(nextRequests);
-    await savePlayerRequests(nextRequests);
+    await db.updatePlayerRequest(requestId, { status: 'approved', resolvedAt: now });
+    await saveCacheJSON(CACHE_KEYS.PLAYER_REQUESTS, nextRequests);
   }, [playerRequests, users]);
 
   const rejectPlayerRequest = useCallback(async (requestId: string) => {
@@ -338,7 +378,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       r.id === requestId ? { ...r, status: 'rejected' as const, resolvedAt: now } : r
     ));
     setPlayerRequests(nextRequests);
-    await savePlayerRequests(nextRequests);
+    await db.updatePlayerRequest(requestId, { status: 'rejected', resolvedAt: now });
+    await saveCacheJSON(CACHE_KEYS.PLAYER_REQUESTS, nextRequests);
   }, [playerRequests]);
 
   // ─── Cohorts ─────────────────────────────────────────────────────────────
@@ -400,14 +441,16 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     };
     const next = [...cohorts, cohort];
     setCohorts(next);
-    await saveCohorts(next);
+    await db.insertCohort(cohort);
+    await saveCacheJSON(CACHE_KEYS.COHORTS, next);
     return cohort;
   }, [cohorts]);
 
   const updateCohort = useCallback(async (id: string, updates: Partial<Cohort>) => {
     const next = cohorts.map(c => (c.id === id ? { ...c, ...updates } : c));
     setCohorts(next);
-    await saveCohorts(next);
+    await db.updateCohort(id, updates);
+    await saveCacheJSON(CACHE_KEYS.COHORTS, next);
   }, [cohorts]);
 
   const deleteCohort = useCallback(async (id: string) => {
@@ -417,19 +460,28 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       throw new Error('Only draft tournaments can be deleted.');
     }
 
+    // CASCADE in DB handles brackets, games, payouts automatically
+    await db.deleteCohort(id);
+
     const nextBrackets = brackets.filter(b => b.cohortId !== id);
-    setBrackets(nextBrackets); await saveBrackets(nextBrackets);
+    setBrackets(nextBrackets);
+    await saveCacheJSON(CACHE_KEYS.BRACKETS, nextBrackets);
 
     const nextGames = games.filter(g => g.cohortId !== id);
-    setGames(nextGames); await saveGames(nextGames);
+    setGames(nextGames);
+    await saveCacheJSON(CACHE_KEYS.GAMES, nextGames);
 
     const nextPayouts = payouts.filter(p => p.cohortId !== id);
-    setPayouts(nextPayouts); await savePayouts(nextPayouts);
+    setPayouts(nextPayouts);
+    await saveCacheJSON(CACHE_KEYS.PAYOUTS, nextPayouts);
 
     const nextCohorts = cohorts
       .filter(c => c.id !== id)
       .map(c => (c.scoreSourceCohortId === id ? { ...c, scoreSourceCohortId: null } : c));
-    setCohorts(nextCohorts); await saveCohorts(nextCohorts);
+    setCohorts(nextCohorts);
+    // score_source_cohort_id ON DELETE SET NULL handles this in DB,
+    // but update local state for cohorts referencing the deleted one
+    await saveCacheJSON(CACHE_KEYS.COHORTS, nextCohorts);
   }, [brackets, games, payouts, cohorts]);
 
   const deployCohort = useCallback(async (
@@ -443,18 +495,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     if (!selectedUsers.length) throw new Error('No users selected for deployment');
 
     if (cohort.tournamentKind === TournamentKind.SERIES) {
+      const updates: Partial<Cohort> = {
+        status: CohortStatus.ACTIVE as typeof CohortStatus.ACTIVE,
+        selectedUserIds: selectedUsers.map(u => u.id),
+        userBracketCounts: counts,
+      };
       const nextCohorts = cohorts.map(c =>
-        c.id === cohortId
-          ? {
-              ...c,
-              status: CohortStatus.ACTIVE as typeof CohortStatus.ACTIVE,
-              selectedUserIds: selectedUsers.map(u => u.id),
-              userBracketCounts: counts,
-            }
-          : c,
+        c.id === cohortId ? { ...c, ...updates } : c,
       );
       setCohorts(nextCohorts);
-      await saveCohorts(nextCohorts);
+      await db.updateCohort(cohortId, updates);
+      await saveCacheJSON(CACHE_KEYS.COHORTS, nextCohorts);
       return;
     }
 
@@ -481,15 +532,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     const nextBrackets = [...brackets, ...newBrackets];
     setBrackets(nextBrackets);
-    await saveBrackets(nextBrackets);
+    await db.insertBrackets(newBrackets);
+    await saveCacheJSON(CACHE_KEYS.BRACKETS, nextBrackets);
 
+    const cohortUpdates: Partial<Cohort> = {
+      status: CohortStatus.ACTIVE as typeof CohortStatus.ACTIVE,
+      selectedUserIds: selectedUsers.map(u => u.id),
+      userBracketCounts: counts,
+    };
     const nextCohorts = cohorts.map(c =>
-      c.id === cohortId
-        ? { ...c, status: CohortStatus.ACTIVE as typeof CohortStatus.ACTIVE, selectedUserIds: selectedUsers.map(u => u.id), userBracketCounts: counts }
-        : c,
+      c.id === cohortId ? { ...c, ...cohortUpdates } : c,
     );
     setCohorts(nextCohorts);
-    await saveCohorts(nextCohorts);
+    await db.updateCohort(cohortId, cohortUpdates);
+    await saveCacheJSON(CACHE_KEYS.COHORTS, nextCohorts);
   }, [brackets, cohorts]);
 
   const queueTournamentEntry = useCallback(async (
@@ -526,7 +582,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     const nextCohorts = cohorts.map(c => (c.id === cohortId ? { ...c, pendingEntryRequests: nextPending } : c));
     setCohorts(nextCohorts);
-    await saveCohorts(nextCohorts);
+    await db.updateCohort(cohortId, { pendingEntryRequests: nextPending });
+    await saveCacheJSON(CACHE_KEYS.COHORTS, nextCohorts);
   }, [cohorts]);
 
   const markTournamentEntryPaid = useCallback(async (cohortId: string, playerId: string) => {
@@ -544,13 +601,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const existingPaidCount = cohort.userBracketCounts?.[playerId] || 0;
     const nextCounts = { ...cohort.userBracketCounts, [playerId]: existingPaidCount + request.bracketCount };
 
+    const updates: Partial<Cohort> = {
+      pendingEntryRequests: nextPending,
+      selectedUserIds: nextSelected,
+      userBracketCounts: nextCounts,
+    };
     const nextCohorts = cohorts.map(c => (
-      c.id === cohortId
-        ? { ...c, pendingEntryRequests: nextPending, selectedUserIds: nextSelected, userBracketCounts: nextCounts }
-        : c
+      c.id === cohortId ? { ...c, ...updates } : c
     ));
     setCohorts(nextCohorts);
-    await saveCohorts(nextCohorts);
+    await db.updateCohort(cohortId, updates);
+    await saveCacheJSON(CACHE_KEYS.COHORTS, nextCohorts);
   }, [cohorts]);
 
   const removeTournamentEntryRequest = useCallback(async (cohortId: string, playerId: string) => {
@@ -560,7 +621,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     const nextPending = (cohort.pendingEntryRequests || []).filter(req => req.playerId !== playerId);
     const nextCohorts = cohorts.map(c => (c.id === cohortId ? { ...c, pendingEntryRequests: nextPending } : c));
     setCohorts(nextCohorts);
-    await saveCohorts(nextCohorts);
+    await db.updateCohort(cohortId, { pendingEntryRequests: nextPending });
+    await saveCacheJSON(CACHE_KEYS.COHORTS, nextCohorts);
   }, [cohorts]);
 
   // ─── Brackets ────────────────────────────────────────────────────────────
@@ -600,17 +662,20 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
 
     const nextPayouts = [...payouts, ...newPayouts];
     setPayouts(nextPayouts);
-    await savePayouts(nextPayouts);
+    await db.insertPayouts(newPayouts);
+    await saveCacheJSON(CACHE_KEYS.PAYOUTS, nextPayouts);
 
     // Check if all brackets in cohort complete → mark cohort complete
     const cohortBrackets = allBrackets.filter(b => b.cohortId === bracket.cohortId);
     if (cohortBrackets.every(b => b.structure.completed)) {
       if (cohort.status !== CohortStatus.COMPLETE) {
+        const statusUpdate = { status: CohortStatus.COMPLETE as typeof CohortStatus.COMPLETE };
         const nextCohorts = cohorts.map(c =>
-          c.id === bracket.cohortId ? { ...c, status: CohortStatus.COMPLETE as typeof CohortStatus.COMPLETE } : c,
+          c.id === bracket.cohortId ? { ...c, ...statusUpdate } : c,
         );
         setCohorts(nextCohorts);
-        await saveCohorts(nextCohorts);
+        await db.updateCohort(bracket.cohortId, statusUpdate);
+        await saveCacheJSON(CACHE_KEYS.COHORTS, nextCohorts);
       }
     }
   }, [cohorts, payouts]);
@@ -618,7 +683,8 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
   const updateBracket = useCallback(async (id: string, updates: Partial<Bracket>) => {
     const next = brackets.map(b => (b.id === id ? { ...b, ...updates } : b));
     setBrackets(next);
-    await saveBrackets(next);
+    await db.updateBracket(id, updates);
+    await saveCacheJSON(CACHE_KEYS.BRACKETS, next);
 
     const bracket = next.find(b => b.id === id);
     if (bracket?.structure.completed && bracket.structure.winner) {
@@ -637,13 +703,17 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
       g => g.cohortId === game.cohortId && g.playerId === game.playerId && g.gameNumber === game.gameNumber,
     );
     let next: Game[];
+    let gameToSave: Game;
     if (idx >= 0) {
-      next = games.map((g, i) => (i === idx ? { ...g, ...game } : g));
+      gameToSave = { ...games[idx], ...game };
+      next = games.map((g, i) => (i === idx ? gameToSave : g));
     } else {
-      next = [...games, { ...game, id: Date.now().toString(), createdAt: new Date().toISOString() }];
+      gameToSave = { ...game, id: Date.now().toString(), createdAt: new Date().toISOString() };
+      next = [...games, gameToSave];
     }
     setGames(next);
-    await saveGames(next);
+    await db.upsertGame(gameToSave);
+    await saveCacheJSON(CACHE_KEYS.GAMES, next);
   }, [games]);
 
   const getPlayerGames = useCallback((cohortId: string, playerId: string) => {
@@ -659,7 +729,6 @@ export function AppProvider({ children }: { children: React.ReactNode }) {
     return payouts.filter(p => {
       if (p.isOperator) return false;
       const nameMatch = p.playerName.toLowerCase().includes(search);
-      // Also match if the player has this as an alias
       const aliasMatch = !nameMatch && users.some(u =>
         u.aliases?.some(a => a.toLowerCase().includes(search)) &&
         u.name.toLowerCase() === p.playerName.toLowerCase()
