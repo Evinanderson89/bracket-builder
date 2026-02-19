@@ -3,6 +3,7 @@ import { View, Text, TouchableOpacity, StyleSheet } from 'react-native';
 import { useRouter, usePathname } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../styles/colors';
+import { Fonts } from '../styles/fonts';
 import { useAuth } from '../context/AuthContext';
 
 const BACK_ROUTES: Record<string, string> = {
@@ -102,13 +103,13 @@ const styles = StyleSheet.create({
   btnText: {
     color: Colors.primary,
     fontSize: 13,
-    fontWeight: '700',
+    fontFamily: Fonts.bodySemiBold,
     letterSpacing: 0.3,
     marginLeft: 5,
   },
   title: {
     fontSize: 17,
-    fontWeight: '800',
+    fontFamily: Fonts.bodyBold,
     color: Colors.textPrimary,
     flex: 1,
     textAlign: 'center',

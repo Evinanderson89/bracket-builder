@@ -14,7 +14,9 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '../context/AuthContext';
 import { useApp } from '../context/AppContext';
 import { Colors } from '../styles/colors';
+import { Fonts } from '../styles/fonts';
 import NavigationHeader from '../components/NavigationHeader';
+import WoodCard from '../components/WoodCard';
 
 export default function HomeScreen() {
   const router = useRouter();
@@ -83,7 +85,7 @@ export default function HomeScreen() {
       <View style={styles.bgOrbAccent} />
 
       <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-        <View style={styles.heroCard}>
+        <WoodCard variant="elevated" style={styles.heroCard} padding={18}>
           <Text style={styles.heroKicker}>LIVE OPERATIONS</Text>
           <Text style={styles.heroTitle}>Run tournaments with a clean control center.</Text>
 
@@ -101,7 +103,7 @@ export default function HomeScreen() {
               <Text style={styles.statLabel}>Brackets</Text>
             </View>
           </View>
-        </View>
+        </WoodCard>
 
         <View style={styles.roleBanner}>
           <View style={styles.roleIconWrap}>
@@ -177,20 +179,10 @@ const styles = StyleSheet.create({
   heroCard: {
     width: '100%',
     maxWidth: 640,
-    borderRadius: 22,
     marginBottom: 16,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    backgroundColor: Colors.surface,
-    padding: 18,
-    shadowColor: Colors.shadow,
-    shadowOffset: { width: 0, height: 12 },
-    shadowOpacity: 0.36,
-    shadowRadius: 18,
-    elevation: 8,
   },
-  heroKicker: { color: Colors.primary, fontWeight: '800', fontSize: 12, letterSpacing: 1.2 },
-  heroTitle: { color: Colors.white, fontSize: 24, fontWeight: '800', lineHeight: 29, marginTop: 6 },
+  heroKicker: { color: Colors.primary, fontFamily: Fonts.bodyBold, fontSize: 12, letterSpacing: 1.2 },
+  heroTitle: { color: Colors.white, fontSize: 24, fontFamily: Fonts.bodyBold, lineHeight: 29, marginTop: 6 },
   heroStatsRow: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 16 },
   statChip: {
     backgroundColor: Colors.surfaceSecondary,
@@ -202,8 +194,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 10,
     alignItems: 'center',
   },
-  statValue: { color: Colors.white, fontWeight: '800', fontSize: 19 },
-  statLabel: { color: 'rgba(234, 242, 255, 0.84)', fontSize: 11, marginTop: 2 },
+  statValue: { color: Colors.white, fontFamily: Fonts.scoreBold, fontSize: 19 },
+  statLabel: { color: Colors.textPrimaryFaded, fontSize: 11, marginTop: 2, fontFamily: Fonts.bodyRegular },
   roleBanner: {
     width: '100%',
     maxWidth: 640,
@@ -223,12 +215,12 @@ const styles = StyleSheet.create({
     marginRight: 10,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: `${Colors.primary}22`,
+    backgroundColor: Colors.primaryTint,
     borderWidth: 1,
-    borderColor: `${Colors.primary}55`,
+    borderColor: Colors.badgeWarningBorder,
   },
-  roleLabel: { color: Colors.textPrimary, fontSize: 14, fontWeight: '700' },
-  roleSub: { color: Colors.textSecondary, fontSize: 12, marginTop: 1, lineHeight: 16 },
+  roleLabel: { color: Colors.textPrimary, fontSize: 14, fontFamily: Fonts.bodySemiBold },
+  roleSub: { color: Colors.textSecondary, fontSize: 12, marginTop: 1, lineHeight: 16, fontFamily: Fonts.bodyRegular },
   switchBtn: {
     marginLeft: 8,
     backgroundColor: Colors.surfaceSecondary,
@@ -238,13 +230,13 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     paddingHorizontal: 12,
   },
-  switchBtnText: { color: Colors.textPrimary, fontWeight: '700', fontSize: 12 },
+  switchBtnText: { color: Colors.textPrimary, fontFamily: Fonts.bodySemiBold, fontSize: 12 },
   sectionTitle: {
     width: '100%',
     maxWidth: 640,
     color: Colors.textPrimary,
     fontSize: 19,
-    fontWeight: '800',
+    fontFamily: Fonts.bodyBold,
     marginBottom: 10,
     letterSpacing: 0.2,
   },
@@ -270,8 +262,8 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surfaceSecondary,
   },
   actionBody: { flex: 1, paddingHorizontal: 10 },
-  actionTitle: { color: Colors.textPrimary, fontSize: 16, fontWeight: '700' },
-  actionSub: { color: Colors.textSecondary, fontSize: 12, lineHeight: 16, marginTop: 3 },
+  actionTitle: { color: Colors.textPrimary, fontSize: 16, fontFamily: Fonts.bodySemiBold },
+  actionSub: { color: Colors.textSecondary, fontSize: 12, lineHeight: 16, marginTop: 3, fontFamily: Fonts.bodyRegular },
   adminBtn: {
     width: '100%',
     maxWidth: 640,
@@ -293,6 +285,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surfaceSecondary,
     marginRight: 10,
   },
-  adminBtnTitle: { color: Colors.textPrimary, fontWeight: '700', fontSize: 15 },
-  adminBtnSub: { color: Colors.textSecondary, fontSize: 12, marginTop: 1 },
+  adminBtnTitle: { color: Colors.textPrimary, fontFamily: Fonts.bodySemiBold, fontSize: 15 },
+  adminBtnSub: { color: Colors.textSecondary, fontSize: 12, marginTop: 1, fontFamily: Fonts.bodyRegular },
 });

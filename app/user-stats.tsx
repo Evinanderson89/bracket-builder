@@ -3,7 +3,10 @@ import { View, Text, StyleSheet, ScrollView, SafeAreaView } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { useApp } from '../context/AppContext';
 import { Colors } from '../styles/colors';
+import { Fonts } from '../styles/fonts';
+import { getProgressionTier, TierStyles } from '../styles/progression';
 import NavigationHeader from '../components/NavigationHeader';
+import WoodCard from '../components/WoodCard';
 import { PayoutAmounts } from '../utils/types';
 
 const ENTRY_FEE = PayoutAmounts.ENTRY_FEE;
@@ -19,6 +22,11 @@ export default function UserStatsScreen() {
       u.name.toLowerCase() === user.name.toLowerCase()
     );
   }, [users, user]);
+
+  const tier = useMemo(() => {
+    if (!profile) return TierStyles.matte;
+    return TierStyles[getProgressionTier(profile.average)];
+  }, [profile]);
 
   const stats = useMemo(() => {
     if (!profile) return null;
@@ -82,7 +90,7 @@ export default function UserStatsScreen() {
       <NavigationHeader title="My Stats" />
       <ScrollView style={styles.scroll}>
         {/* Summary */}
-        <View style={styles.hud}>
+        <WoodCard style={[styles.hud, { borderColor: tier.borderColor, borderWidth: tier.borderWidth }]} padding={0} grainOpacity={tier.grainOpacity}>
           <View style={styles.hudMain}>
             <View style={styles.hudMainItem}>
               <Text style={styles.hudLabel}>Net P/L</Text>
@@ -98,16 +106,16 @@ export default function UserStatsScreen() {
             </View>
           </View>
           <View style={styles.hudGrid}>
-            <View style={styles.hudItem}><Text style={styles.hudSmLabel}>Won</Text><Text style={styles.hudSmVal}>${stats.revenue}</Text></View>
-            <View style={styles.hudItem}><Text style={styles.hudSmLabel}>Spent</Text><Text style={styles.hudSmVal}>${stats.cost}</Text></View>
-            <View style={styles.hudItem}><Text style={styles.hudSmLabel}>Win Rate</Text><Text style={styles.hudSmVal}>{stats.winRate}%</Text></View>
-            <View style={styles.hudItem}><Text style={styles.hudSmLabel}>Active</Text><Text style={styles.hudSmVal}>{activeBracketCount}</Text></View>
+            <View style={styles.hudItem}><Text style={styles.hudSmLabel}>Won</Text><Text style={[styles.hudSmVal, { color: tier.scoreColor }]}>${stats.revenue}</Text></View>
+            <View style={styles.hudItem}><Text style={styles.hudSmLabel}>Spent</Text><Text style={[styles.hudSmVal, { color: tier.scoreColor }]}>${stats.cost}</Text></View>
+            <View style={styles.hudItem}><Text style={styles.hudSmLabel}>Win Rate</Text><Text style={[styles.hudSmVal, { color: tier.scoreColor }]}>{stats.winRate}%</Text></View>
+            <View style={styles.hudItem}><Text style={styles.hudSmLabel}>Active</Text><Text style={[styles.hudSmVal, { color: tier.scoreColor }]}>{activeBracketCount}</Text></View>
           </View>
-        </View>
+        </WoodCard>
 
         {/* Chart */}
         {stats.chart.length > 0 && (
-          <View style={styles.chartBox}>
+          <WoodCard style={[styles.chartBox, { borderColor: tier.borderColor }]} padding={16} grainOpacity={tier.grainOpacity}>
             <Text style={styles.chartTitle}>Daily Performance</Text>
             <View style={styles.chartBody}>
               {stats.chart.map(day => {
@@ -125,14 +133,14 @@ export default function UserStatsScreen() {
                 );
               })}
             </View>
-          </View>
+          </WoodCard>
         )}
 
         {/* History */}
         <View style={styles.histList}>
           <Text style={styles.sectionHeader}>Daily Breakdown</Text>
           {stats.history.map(day => (
-            <View key={day.date} style={styles.histRow}>
+            <WoodCard key={day.date} style={styles.histRow} padding={16}>
               <View>
                 <Text style={styles.histDate}>{day.date}</Text>
                 <Text style={styles.histSub}>{day.entries} {day.entries === 1 ? 'Entry' : 'Entries'} (${day.cost})</Text>
@@ -143,7 +151,7 @@ export default function UserStatsScreen() {
                   {day.pnl >= 0 ? '+' : ''}{day.pnl}
                 </Text>
               </View>
-            </View>
+            </WoodCard>
           ))}
         </View>
 
@@ -157,29 +165,29 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   scroll: { flex: 1 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },
-  emptyText: { fontSize: 16, color: Colors.textSecondary, textAlign: 'center' },
-  hud: { margin: 16, backgroundColor: Colors.surface, borderRadius: 12, borderWidth: 1, borderColor: Colors.border, overflow: 'hidden' },
+  emptyText: { fontSize: 16, color: Colors.textSecondary, textAlign: 'center', fontFamily: Fonts.bodyRegular },
+  hud: { margin: 16, overflow: 'hidden' },
   hudMain: { flexDirection: 'row', borderBottomWidth: 1, borderColor: Colors.border },
   hudMainItem: { flex: 1, padding: 20, alignItems: 'center' },
-  hudMainVal: { fontSize: 28, fontWeight: 'bold', marginTop: 4 },
-  hudLabel: { fontSize: 12, color: Colors.textSecondary, textTransform: 'uppercase', fontWeight: 'bold' },
+  hudMainVal: { fontSize: 28, fontFamily: Fonts.scoreBold, marginTop: 4 },
+  hudLabel: { fontSize: 12, color: Colors.textSecondary, textTransform: 'uppercase', fontFamily: Fonts.bodySemiBold },
   hudGrid: { flexDirection: 'row', padding: 16 },
   hudItem: { flex: 1, alignItems: 'center' },
-  hudSmLabel: { fontSize: 10, color: Colors.textSecondary, textTransform: 'uppercase', marginBottom: 4 },
-  hudSmVal: { fontSize: 16, fontWeight: 'bold', color: Colors.white },
-  chartBox: { marginHorizontal: 16, marginBottom: 16, padding: 16, backgroundColor: Colors.surface, borderRadius: 12, borderWidth: 1, borderColor: Colors.border },
-  chartTitle: { color: Colors.white, fontWeight: 'bold', marginBottom: 16, textAlign: 'center', fontSize: 14 },
+  hudSmLabel: { fontSize: 10, color: Colors.textSecondary, textTransform: 'uppercase', marginBottom: 4, fontFamily: Fonts.bodyRegular },
+  hudSmVal: { fontSize: 16, fontFamily: Fonts.scoreBold, color: Colors.white },
+  chartBox: { marginHorizontal: 16, marginBottom: 16 },
+  chartTitle: { color: Colors.white, fontFamily: Fonts.bodySemiBold, marginBottom: 16, textAlign: 'center', fontSize: 14 },
   chartBody: { flexDirection: 'row', height: 160, alignItems: 'flex-end', justifyContent: 'space-around', paddingVertical: 10 },
   barCol: { alignItems: 'center', flex: 1 },
   barTrack: { height: 100, width: 12, justifyContent: 'flex-end' },
   barFill: { width: '100%', borderRadius: 4 },
-  barLabel: { fontSize: 9, color: Colors.textSecondary, marginBottom: 2 },
-  barDate: { fontSize: 9, color: Colors.textSecondary, marginTop: 4 },
+  barLabel: { fontSize: 9, color: Colors.textSecondary, marginBottom: 2, fontFamily: Fonts.bodyRegular },
+  barDate: { fontSize: 9, color: Colors.textSecondary, marginTop: 4, fontFamily: Fonts.bodyRegular },
   histList: { paddingHorizontal: 16 },
-  sectionHeader: { color: Colors.textSecondary, fontWeight: 'bold', marginBottom: 12, textTransform: 'uppercase', fontSize: 12 },
-  histRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: Colors.surface, padding: 16, borderRadius: 8, marginBottom: 8, borderWidth: 1, borderColor: Colors.border },
-  histDate: { color: Colors.white, fontWeight: 'bold', fontSize: 16 },
-  histSub: { color: Colors.textSecondary, fontSize: 12 },
-  histWon: { color: Colors.success, fontSize: 12, marginBottom: 2 },
-  histPnl: { fontWeight: 'bold', fontSize: 16 },
+  sectionHeader: { color: Colors.textSecondary, fontFamily: Fonts.bodySemiBold, marginBottom: 12, textTransform: 'uppercase', fontSize: 12 },
+  histRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
+  histDate: { color: Colors.white, fontFamily: Fonts.bodySemiBold, fontSize: 16 },
+  histSub: { color: Colors.textSecondary, fontSize: 12, fontFamily: Fonts.bodyRegular },
+  histWon: { color: Colors.success, fontSize: 12, marginBottom: 2, fontFamily: Fonts.bodyRegular },
+  histPnl: { fontFamily: Fonts.scoreBold, fontSize: 16 },
 });

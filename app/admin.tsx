@@ -2,6 +2,7 @@ import React, { useState } from 'react';
 import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, SafeAreaView, Alert } from 'react-native';
 import { useApp } from '../context/AppContext';
 import { Colors } from '../styles/colors';
+import { Fonts } from '../styles/fonts';
 import NavigationHeader from '../components/NavigationHeader';
 
 export default function AdminScreen() {
@@ -103,26 +104,26 @@ export default function AdminScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   section: { backgroundColor: Colors.surface, padding: 16, borderBottomWidth: 1, borderBottomColor: Colors.border },
-  label: { fontSize: 14, fontWeight: '600', color: Colors.textPrimary, marginBottom: 8 },
+  label: { fontSize: 14, fontFamily: Fonts.bodySemiBold, color: Colors.textPrimary, marginBottom: 8 },
   input: { backgroundColor: Colors.background, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, padding: 12, fontSize: 16, color: Colors.textPrimary },
-  toggle: { fontSize: 16, fontWeight: '600', color: Colors.textPrimary },
+  toggle: { fontSize: 16, fontFamily: Fonts.bodySemiBold, color: Colors.textPrimary },
   pwForm: { paddingTop: 16 },
   pwInfo: { fontSize: 14, color: Colors.textSecondary, marginBottom: 16 },
   saveBtn: { backgroundColor: Colors.primary, padding: 16, borderRadius: 8, marginTop: 12, alignItems: 'center' },
-  saveBtnText: { color: Colors.white, fontSize: 16, fontWeight: '600' },
-  sectionTitle: { fontSize: 16, fontWeight: 'bold', color: Colors.textPrimary, marginBottom: 12 },
+  saveBtnText: { color: Colors.white, fontSize: 16, fontFamily: Fonts.bodySemiBold },
+  sectionTitle: { fontSize: 16, fontFamily: Fonts.bodyBold, color: Colors.textPrimary, marginBottom: 12 },
   info: { fontSize: 14, color: Colors.textSecondary, marginBottom: 12 },
   warnBtn: { backgroundColor: Colors.warning, padding: 16, borderRadius: 8, alignItems: 'center' },
-  warnBtnText: { color: Colors.white, fontSize: 16, fontWeight: '600' },
+  warnBtnText: { color: Colors.white, fontSize: 16, fontFamily: Fonts.bodySemiBold },
   scroll: { flex: 1 },
   summaryCard: { backgroundColor: Colors.accent, margin: 16, padding: 20, borderRadius: 8, alignItems: 'center' },
   summaryLabel: { fontSize: 16, color: Colors.white, marginBottom: 8 },
-  summaryAmt: { fontSize: 32, fontWeight: 'bold', color: Colors.white, marginBottom: 4 },
+  summaryAmt: { fontSize: 32, fontFamily: Fonts.scoreBold, color: Colors.white, marginBottom: 4 },
   summarySub: { fontSize: 14, color: Colors.white, opacity: 0.9 },
   empty: { padding: 40, alignItems: 'center' },
   emptyText: { fontSize: 16, color: Colors.textSecondary, textAlign: 'center' },
   card: { backgroundColor: Colors.surface, margin: 16, marginTop: 0, padding: 16, borderRadius: 8, borderWidth: 1, borderColor: Colors.border },
-  cardTitle: { fontSize: 18, fontWeight: 'bold', color: Colors.textPrimary, marginBottom: 8 },
-  cardAmt: { fontSize: 24, fontWeight: 'bold', color: Colors.primary, marginBottom: 4 },
+  cardTitle: { fontSize: 18, fontFamily: Fonts.bodyBold, color: Colors.textPrimary, marginBottom: 8 },
+  cardAmt: { fontSize: 24, fontFamily: Fonts.scoreBold, color: Colors.primary, marginBottom: 4 },
   cardSub: { fontSize: 14, color: Colors.textSecondary },
 });

@@ -3,7 +3,9 @@ import { View, Text, TextInput, TouchableOpacity, StyleSheet, ScrollView, SafeAr
 import { useLocalSearchParams } from 'expo-router';
 import { useApp } from '../context/AppContext';
 import { Colors } from '../styles/colors';
+import { Fonts } from '../styles/fonts';
 import NavigationHeader from '../components/NavigationHeader';
+import WoodCard from '../components/WoodCard';
 import { PayoutAmounts } from '../utils/types';
 
 const ENTRY_FEE = PayoutAmounts.ENTRY_FEE;
@@ -73,7 +75,7 @@ export default function PayoutScreen() {
     if (!stats || stats.chart.length === 0) return null;
     const maxVal = Math.max(...stats.chart.map(d => Math.abs(d.pnl)), 10);
     return (
-      <View style={styles.chartBox}>
+      <WoodCard style={styles.chartBox} padding={16}>
         <Text style={styles.chartTitle}>Daily Performance</Text>
         <View style={styles.chartBody}>
           {stats.chart.map(day => {
@@ -91,7 +93,7 @@ export default function PayoutScreen() {
             );
           })}
         </View>
-      </View>
+      </WoodCard>
     );
   };
 
@@ -133,10 +135,10 @@ export default function PayoutScreen() {
                     <Text style={styles.summarySub}>{activeBrackets.length} Active</Text>
                   </View>
                   {activeBrackets.map(b => (
-                    <View key={b.id} style={styles.card}>
+                    <WoodCard key={b.id} style={styles.card} padding={16}>
                       <View style={styles.cardRow}><Text style={styles.cardTitle}>{b.cohortName}</Text><Text style={styles.cardSub}>Bracket {b.bracketNum}</Text></View>
                       <View style={styles.cardRow}><Text style={styles.cardDetail}>Round {b.currentRound}</Text><Text style={[styles.cardDetail, { color: Colors.success }]}>Potential: $25</Text></View>
-                    </View>
+                    </WoodCard>
                   ))}
                 </>
               )
@@ -148,7 +150,7 @@ export default function PayoutScreen() {
               ) : (
                 <>
                   {/* HUD */}
-                  <View style={styles.hud}>
+                  <WoodCard style={styles.hud} padding={0}>
                     <View style={styles.hudMain}>
                       <View style={styles.hudMainItem}>
                         <Text style={styles.hudLabel}>Net P/L</Text>
@@ -168,7 +170,7 @@ export default function PayoutScreen() {
                       <View style={styles.hudItem}><Text style={styles.hudSmLabel}>Spent</Text><Text style={styles.hudSmVal}>${stats.cost}</Text></View>
                       <View style={styles.hudItem}><Text style={styles.hudSmLabel}>Win Rate</Text><Text style={styles.hudSmVal}>{stats.winRate}%</Text></View>
                     </View>
-                  </View>
+                  </WoodCard>
 
                   {renderChart()}
 
@@ -203,47 +205,47 @@ export default function PayoutScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   searchBox: { padding: 16, backgroundColor: Colors.surface, borderBottomWidth: 1, borderColor: Colors.border },
-  label: { color: Colors.textSecondary, fontSize: 12, marginBottom: 8, textTransform: 'uppercase' },
+  label: { color: Colors.textSecondary, fontSize: 12, marginBottom: 8, textTransform: 'uppercase', fontFamily: Fonts.bodySemiBold },
   input: { backgroundColor: Colors.background, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, padding: 12, color: Colors.white, fontSize: 16 },
   tabBar: { flexDirection: 'row', backgroundColor: Colors.surface, borderBottomWidth: 1, borderColor: Colors.border },
   tab: { flex: 1, padding: 16, alignItems: 'center', borderBottomWidth: 3, borderColor: 'transparent' },
   tabActive: { borderColor: Colors.primary },
-  tabText: { color: Colors.textSecondary, fontWeight: '600' },
+  tabText: { color: Colors.textSecondary, fontFamily: Fonts.bodySemiBold },
   tabTextActive: { color: Colors.primary },
   scroll: { flex: 1 },
   empty: { padding: 40, alignItems: 'center' },
-  emptyText: { color: Colors.textSecondary },
+  emptyText: { color: Colors.textSecondary, fontFamily: Fonts.bodyRegular },
   summaryCard: { backgroundColor: Colors.primary, margin: 16, padding: 20, borderRadius: 12, alignItems: 'center' },
-  summaryLabel: { color: 'rgba(255,255,255,0.8)', fontSize: 14, marginBottom: 4 },
-  summaryAmt: { color: Colors.white, fontSize: 32, fontWeight: 'bold' },
-  summarySub: { color: 'rgba(255,255,255,0.8)', fontSize: 12, marginTop: 4 },
-  card: { backgroundColor: Colors.surface, marginHorizontal: 16, marginBottom: 8, padding: 16, borderRadius: 8, borderWidth: 1, borderColor: Colors.border },
+  summaryLabel: { color: Colors.warmWhite80, fontSize: 14, marginBottom: 4, fontFamily: Fonts.bodyRegular },
+  summaryAmt: { color: Colors.white, fontSize: 32, fontFamily: Fonts.scoreBold },
+  summarySub: { color: Colors.warmWhite80, fontSize: 12, marginTop: 4, fontFamily: Fonts.bodyRegular },
+  card: { marginHorizontal: 16, marginBottom: 8 },
   cardRow: { flexDirection: 'row', justifyContent: 'space-between', marginBottom: 4 },
-  cardTitle: { color: Colors.white, fontWeight: 'bold', fontSize: 16 },
-  cardSub: { color: Colors.textSecondary },
-  cardDetail: { color: Colors.textSecondary, fontSize: 14 },
-  hud: { margin: 16, backgroundColor: Colors.surface, borderRadius: 12, borderWidth: 1, borderColor: Colors.border, overflow: 'hidden' },
+  cardTitle: { color: Colors.white, fontFamily: Fonts.bodySemiBold, fontSize: 16 },
+  cardSub: { color: Colors.textSecondary, fontFamily: Fonts.bodyRegular },
+  cardDetail: { color: Colors.textSecondary, fontSize: 14, fontFamily: Fonts.bodyRegular },
+  hud: { margin: 16, overflow: 'hidden' },
   hudMain: { flexDirection: 'row', borderBottomWidth: 1, borderColor: Colors.border },
   hudMainItem: { flex: 1, padding: 20, alignItems: 'center' },
-  hudMainVal: { fontSize: 28, fontWeight: 'bold', marginTop: 4 },
-  hudLabel: { fontSize: 12, color: Colors.textSecondary, textTransform: 'uppercase', fontWeight: 'bold' },
+  hudMainVal: { fontSize: 28, fontFamily: Fonts.scoreBold, marginTop: 4 },
+  hudLabel: { fontSize: 12, color: Colors.textSecondary, textTransform: 'uppercase', fontFamily: Fonts.bodySemiBold },
   hudGrid: { flexDirection: 'row', padding: 16 },
   hudItem: { flex: 1, alignItems: 'center' },
-  hudSmLabel: { fontSize: 10, color: Colors.textSecondary, textTransform: 'uppercase', marginBottom: 4 },
-  hudSmVal: { fontSize: 16, fontWeight: 'bold', color: Colors.white },
-  chartBox: { marginHorizontal: 16, marginBottom: 16, padding: 16, backgroundColor: Colors.surface, borderRadius: 12, borderWidth: 1, borderColor: Colors.border },
-  chartTitle: { color: Colors.white, fontWeight: 'bold', marginBottom: 16, textAlign: 'center', fontSize: 14 },
+  hudSmLabel: { fontSize: 10, color: Colors.textSecondary, textTransform: 'uppercase', marginBottom: 4, fontFamily: Fonts.bodyRegular },
+  hudSmVal: { fontSize: 16, fontFamily: Fonts.scoreBold, color: Colors.white },
+  chartBox: { marginHorizontal: 16, marginBottom: 16 },
+  chartTitle: { color: Colors.white, fontFamily: Fonts.bodySemiBold, marginBottom: 16, textAlign: 'center', fontSize: 14 },
   chartBody: { flexDirection: 'row', height: 160, alignItems: 'flex-end', justifyContent: 'space-around', paddingVertical: 10 },
   barCol: { alignItems: 'center', flex: 1 },
   barTrack: { height: 100, width: 12, justifyContent: 'flex-end' },
   barFill: { width: '100%', borderRadius: 4 },
-  barLabel: { fontSize: 9, color: Colors.textSecondary, marginBottom: 2 },
-  barDate: { fontSize: 9, color: Colors.textSecondary, marginTop: 4 },
+  barLabel: { fontSize: 9, color: Colors.textSecondary, marginBottom: 2, fontFamily: Fonts.bodyRegular },
+  barDate: { fontSize: 9, color: Colors.textSecondary, marginTop: 4, fontFamily: Fonts.bodyRegular },
   histList: { paddingHorizontal: 16 },
-  sectionHeader: { color: Colors.textSecondary, fontWeight: 'bold', marginBottom: 12, textTransform: 'uppercase', fontSize: 12 },
+  sectionHeader: { color: Colors.textSecondary, fontFamily: Fonts.bodySemiBold, marginBottom: 12, textTransform: 'uppercase', fontSize: 12 },
   histRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: Colors.surface, padding: 16, borderRadius: 8, marginBottom: 8, borderWidth: 1, borderColor: Colors.border },
-  histDate: { color: Colors.white, fontWeight: 'bold', fontSize: 16 },
-  histSub: { color: Colors.textSecondary, fontSize: 12 },
-  histWon: { color: Colors.success, fontSize: 12, marginBottom: 2 },
-  histPnl: { fontWeight: 'bold', fontSize: 16 },
+  histDate: { color: Colors.white, fontFamily: Fonts.bodySemiBold, fontSize: 16 },
+  histSub: { color: Colors.textSecondary, fontSize: 12, fontFamily: Fonts.bodyRegular },
+  histWon: { color: Colors.success, fontSize: 12, marginBottom: 2, fontFamily: Fonts.bodyRegular },
+  histPnl: { fontFamily: Fonts.scoreBold, fontSize: 16 },
 });

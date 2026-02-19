@@ -15,11 +15,13 @@ import { useRouter, useLocalSearchParams } from 'expo-router';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { Colors } from '../styles/colors';
+import { Fonts } from '../styles/fonts';
 import { formatBowlingCenterLocation, summarizeBowlingCenters } from '../utils/bowlingCenters';
 import { CohortStatus, CohortType, TournamentKind } from '../utils/types';
 import { calculateTotalScore, getBracketGameWindow, isPlayerLiveInCohort } from '../utils/bracketLogic';
 import { getTournamentDescription } from '../utils/tournamentDescription';
 import NavigationHeader from '../components/NavigationHeader';
+import WoodCard from '../components/WoodCard';
 
 type TabKey = 'brackets' | 'series' | 'roster';
 
@@ -361,7 +363,7 @@ export default function CohortDetailScreen() {
       ) : (
         <>
           {seriesStandings.map((entry, idx) => (
-            <View key={entry.player.id} style={styles.seriesRow}>
+            <WoodCard key={entry.player.id} style={styles.seriesRow} padding={12}>
               <View style={styles.rankBubble}><Text style={styles.rankText}>{idx + 1}</Text></View>
               <View style={{ flex: 1 }}>
                 <Text style={styles.seriesName}>{entry.player.name}</Text>
@@ -378,7 +380,7 @@ export default function CohortDetailScreen() {
                 <Text style={styles.totalLabel}>Total</Text>
                 <Text style={styles.totalValue}>{entry.total}</Text>
               </View>
-            </View>
+            </WoodCard>
           ))}
         </>
       )}
@@ -387,7 +389,7 @@ export default function CohortDetailScreen() {
 
   const renderRoster = () => (
     <View style={styles.tabContent}>
-      <View style={styles.scoreAccessWrap}>
+      <WoodCard style={styles.scoreAccessWrap} padding={12}>
         <Text style={styles.scoreAccessTitle}>Score Entry Rights</Text>
         <Text style={styles.scoreAccessMeta}>Tournament admin: {creatorLabel}</Text>
         <Text style={styles.scoreAccessHint}>
@@ -422,10 +424,10 @@ export default function CohortDetailScreen() {
               : 'Sign in as the tournament creator to manage these rights.'}
           </Text>
         )}
-      </View>
+      </WoodCard>
 
       {cohort.status === CohortStatus.NOT_DEPLOYED && (
-        <View style={styles.pendingWrap}>
+        <WoodCard style={styles.pendingWrap} padding={12}>
           <Text style={styles.pendingTitle}>Pending Payment Queue</Text>
           {pendingRequests.length === 0 ? (
             <Text style={styles.pendingEmpty}>No pending payment requests.</Text>
@@ -447,7 +449,7 @@ export default function CohortDetailScreen() {
               </View>
             ))
           )}
-        </View>
+        </WoodCard>
       )}
 
       {selectedUsers.length === 0 ? (
@@ -474,7 +476,7 @@ export default function CohortDetailScreen() {
             const live = isSeries ? true : isPlayerLiveInCohort(u.id, brackets);
 
             return (
-              <View key={u.id} style={[styles.rosterRow, !live && styles.rosterRowDim]}>
+              <WoodCard key={u.id} style={!live ? { ...styles.rosterRow, ...styles.rosterRowDim } : styles.rosterRow} padding={12}>
                 <View style={styles.avatar}><Text style={styles.avatarText}>{u.name[0]}</Text></View>
                 <View style={styles.rosterInfo}>
                   <Text style={styles.rosterName}>{u.name}</Text>
@@ -495,7 +497,7 @@ export default function CohortDetailScreen() {
                     <Text style={styles.entryLabel}>{entries === 1 ? 'Spot' : 'Spots'}</Text>
                   </View>
                 )}
-              </View>
+              </WoodCard>
             );
           })}
         </>
@@ -511,7 +513,7 @@ export default function CohortDetailScreen() {
     <SafeAreaView style={styles.container}>
       <NavigationHeader title={cohort.name} />
 
-      <View style={styles.hudCard}>
+      <WoodCard style={styles.hudCard} padding={12}>
         <View style={styles.hudRow}><Text style={styles.hudLabel}>Mode</Text><Text style={styles.hudValue}>{cohort.tournamentKind}</Text></View>
         <View style={styles.hudRow}><Text style={styles.hudLabel}>Scoring</Text><Text style={styles.hudValue}>{cohort.type}</Text></View>
         <View style={styles.hudRow}>
@@ -525,14 +527,14 @@ export default function CohortDetailScreen() {
           </Text>
         </View>
         <View style={styles.hudRow}><Text style={styles.hudLabel}>Status</Text><Text style={[styles.hudValue, { color: statusColor(cohort.status) }]}>{cohort.status.toUpperCase()}</Text></View>
-      </View>
+      </WoodCard>
 
-      <View style={styles.descriptionCard}>
+      <WoodCard style={styles.descriptionCard} padding={12}>
         <Text style={styles.descriptionTitle}>How This Tournament Works</Text>
         <Text style={styles.descriptionText}>{descriptionText}</Text>
-      </View>
+      </WoodCard>
 
-      <View style={styles.centersCard}>
+      <WoodCard style={styles.centersCard} padding={12}>
         <Text style={styles.centersTitle}>Bowling Centers</Text>
         <Text style={styles.centersSummary}>{centerSummary}</Text>
         {(cohort.centers || []).length > 0 && (
@@ -547,7 +549,7 @@ export default function CohortDetailScreen() {
             ))}
           </View>
         )}
-      </View>
+      </WoodCard>
 
       <View style={styles.tabs}>
         {tabItems.map(t => (
@@ -569,12 +571,12 @@ export default function CohortDetailScreen() {
           <View style={styles.footerInfo}>
             {!isSeries ? (
               <>
-                <Text style={styles.footerSlots}><Text style={{ fontWeight: 'bold', color: Colors.white }}>{totalSlots}</Text> Spots Filled</Text>
+                <Text style={styles.footerSlots}><Text style={{ fontFamily: Fonts.bodyBold, color: Colors.white }}>{totalSlots}</Text> Spots Filled</Text>
                 <Text style={styles.footerHint}>Add {slotsNeeded} more for next bracket</Text>
               </>
             ) : (
               <>
-                <Text style={styles.footerSlots}><Text style={{ fontWeight: 'bold', color: Colors.white }}>{selectedUsers.length}</Text> Players Ready</Text>
+                <Text style={styles.footerSlots}><Text style={{ fontFamily: Fonts.bodyBold, color: Colors.white }}>{selectedUsers.length}</Text> Players Ready</Text>
                 <Text style={styles.footerHint}>Series will score across all {cohort.totalGames} games.</Text>
               </>
             )}
@@ -694,53 +696,38 @@ export default function CohortDetailScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   hudCard: {
-    backgroundColor: Colors.surface,
     margin: 16,
     marginBottom: 8,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    padding: 12,
   },
   hudRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', paddingVertical: 4 },
-  hudLabel: { fontSize: 11, color: Colors.textSecondary, textTransform: 'uppercase', fontWeight: '700', letterSpacing: 0.7 },
-  hudValue: { fontSize: 13, fontWeight: '700', color: Colors.white },
+  hudLabel: { fontSize: 11, color: Colors.textSecondary, textTransform: 'uppercase', fontFamily: Fonts.bodySemiBold, letterSpacing: 0.7 },
+  hudValue: { fontSize: 13, fontFamily: Fonts.bodySemiBold, color: Colors.white },
   descriptionCard: {
     marginHorizontal: 16,
     marginBottom: 8,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 10,
-    padding: 12,
   },
   descriptionTitle: {
     color: Colors.primary,
     fontSize: 11,
-    fontWeight: '800',
+    fontFamily: Fonts.bodySemiBold,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: 6,
   },
-  descriptionText: { color: Colors.textPrimary, fontSize: 13, lineHeight: 19 },
+  descriptionText: { color: Colors.textPrimary, fontFamily: Fonts.bodyRegular, fontSize: 13, lineHeight: 19 },
   centersCard: {
     marginHorizontal: 16,
     marginBottom: 8,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 10,
-    padding: 12,
   },
   centersTitle: {
     color: Colors.info,
     fontSize: 11,
-    fontWeight: '800',
+    fontFamily: Fonts.bodySemiBold,
     textTransform: 'uppercase',
     letterSpacing: 0.5,
     marginBottom: 6,
   },
-  centersSummary: { color: Colors.textPrimary, fontSize: 12, lineHeight: 18 },
+  centersSummary: { color: Colors.textPrimary, fontFamily: Fonts.bodyRegular, fontSize: 12, lineHeight: 18 },
   centersList: { marginTop: 8 },
   centerRow: {
     borderWidth: 1,
@@ -751,8 +738,8 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     marginBottom: 6,
   },
-  centerName: { color: Colors.textPrimary, fontWeight: '700', fontSize: 13 },
-  centerMeta: { color: Colors.textSecondary, fontSize: 11, marginTop: 2 },
+  centerName: { color: Colors.textPrimary, fontFamily: Fonts.bodySemiBold, fontSize: 13 },
+  centerMeta: { color: Colors.textSecondary, fontFamily: Fonts.bodyRegular, fontSize: 11, marginTop: 2 },
   tabs: {
     flexDirection: 'row',
     marginHorizontal: 16,
@@ -765,8 +752,8 @@ const styles = StyleSheet.create({
   },
   tabBtn: { flex: 1, paddingVertical: 8, alignItems: 'center', borderRadius: 6 },
   tabBtnActive: { backgroundColor: Colors.primary },
-  tabBtnText: { color: Colors.textSecondary, fontWeight: '600' },
-  tabBtnTextActive: { color: Colors.white, fontWeight: 'bold' },
+  tabBtnText: { color: Colors.textSecondary, fontFamily: Fonts.bodySemiBold },
+  tabBtnTextActive: { color: Colors.white, fontFamily: Fonts.bodyBold },
   scroll: { flex: 1 },
   tabContent: { paddingHorizontal: 16 },
   filterRow: { flexDirection: 'row', alignItems: 'center', marginBottom: 12, marginTop: 4 },
@@ -781,11 +768,11 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   checkboxActive: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  checkmark: { color: Colors.white, fontWeight: 'bold', fontSize: 14 },
-  filterLabel: { color: Colors.textSecondary, fontSize: 14, fontWeight: '600' },
+  checkmark: { color: Colors.white, fontFamily: Fonts.bodyBold, fontSize: 14 },
+  filterLabel: { color: Colors.textSecondary, fontSize: 14, fontFamily: Fonts.bodySemiBold },
   empty: { alignItems: 'center', marginTop: 60 },
-  emptyTitle: { fontSize: 18, fontWeight: 'bold', color: Colors.white, marginBottom: 8 },
-  emptySub: { textAlign: 'center', color: Colors.textSecondary, marginBottom: 20, paddingHorizontal: 32 },
+  emptyTitle: { fontSize: 18, fontFamily: Fonts.bodyBold, color: Colors.white, marginBottom: 8 },
+  emptySub: { textAlign: 'center', color: Colors.textSecondary, fontFamily: Fonts.bodyRegular, marginBottom: 20, paddingHorizontal: 32 },
   emptyBtn: {
     backgroundColor: Colors.surfaceSecondary,
     paddingHorizontal: 20,
@@ -794,7 +781,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
   },
-  emptyBtnText: { color: Colors.primary, fontWeight: 'bold' },
+  emptyBtnText: { color: Colors.primary, fontFamily: Fonts.bodyBold },
   bracketCard: { backgroundColor: Colors.surface, borderRadius: 12, marginBottom: 16, borderWidth: 1, borderColor: Colors.border },
   bracketTop: {
     flexDirection: 'row',
@@ -805,25 +792,25 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.border,
     backgroundColor: Colors.surfaceSecondary,
   },
-  bracketTitle: { color: Colors.white, fontWeight: 'bold', fontSize: 16 },
+  bracketTitle: { color: Colors.white, fontFamily: Fonts.bodyBold, fontSize: 16 },
   pill: { paddingHorizontal: 8, paddingVertical: 4, borderRadius: 12 },
-  pillActive: { backgroundColor: 'rgba(59,130,246,0.2)' },
-  pillComplete: { backgroundColor: 'rgba(16,185,129,0.2)' },
-  pillText: { fontSize: 10, fontWeight: 'bold', color: Colors.white },
+  pillActive: { backgroundColor: Colors.badgeActiveBg },
+  pillComplete: { backgroundColor: Colors.badgeSuccessBg },
+  pillText: { fontSize: 10, fontFamily: Fonts.bodyBold, color: Colors.white },
   bracketBody: { padding: 16 },
-  bracketSub: { color: Colors.textSecondary, marginBottom: 12 },
+  bracketSub: { color: Colors.textSecondary, fontFamily: Fonts.bodyRegular, marginBottom: 12 },
   winnerRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: 'rgba(245,158,11,0.1)',
+    backgroundColor: Colors.badgeWarningBg,
     padding: 8,
     borderRadius: 6,
     borderWidth: 1,
-    borderColor: 'rgba(245,158,11,0.3)',
+    borderColor: Colors.badgeWarningBorder,
   },
-  winnerLabel: { color: Colors.accent, fontWeight: 'bold', marginRight: 6 },
-  winnerName: { color: Colors.white },
-  progressText: { fontSize: 12, color: Colors.textSecondary, fontWeight: '600' },
+  winnerLabel: { color: Colors.accent, fontFamily: Fonts.bodyBold, marginRight: 6 },
+  winnerName: { color: Colors.white, fontFamily: Fonts.bodyRegular },
+  progressText: { fontSize: 12, color: Colors.textSecondary, fontFamily: Fonts.bodySemiBold },
   sourceBanner: {
     marginBottom: 10,
     borderWidth: 1,
@@ -832,14 +819,9 @@ const styles = StyleSheet.create({
     borderRadius: 8,
     padding: 10,
   },
-  sourceBannerText: { color: Colors.primary, fontSize: 12, fontWeight: '700' },
+  sourceBannerText: { color: Colors.primary, fontSize: 12, fontFamily: Fonts.bodySemiBold },
   seriesRow: {
     flexDirection: 'row',
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 10,
-    padding: 12,
     marginBottom: 10,
     alignItems: 'flex-start',
   },
@@ -855,9 +837,9 @@ const styles = StyleSheet.create({
     marginRight: 10,
     marginTop: 2,
   },
-  rankText: { color: Colors.textPrimary, fontWeight: '800', fontSize: 12 },
-  seriesName: { color: Colors.textPrimary, fontSize: 15, fontWeight: '700' },
-  seriesMeta: { color: Colors.textSecondary, fontSize: 11, marginTop: 2 },
+  rankText: { color: Colors.textPrimary, fontFamily: Fonts.scoreBold, fontSize: 12 },
+  seriesName: { color: Colors.textPrimary, fontSize: 15, fontFamily: Fonts.bodySemiBold },
+  seriesMeta: { color: Colors.textSecondary, fontFamily: Fonts.bodyRegular, fontSize: 11, marginTop: 2 },
   seriesScoresRow: { flexDirection: 'row', flexWrap: 'wrap', marginTop: 8 },
   seriesScoreChip: {
     borderWidth: 1,
@@ -869,22 +851,17 @@ const styles = StyleSheet.create({
     marginRight: 6,
     marginBottom: 6,
   },
-  seriesScoreChipText: { color: Colors.textSecondary, fontSize: 11, fontWeight: '600' },
+  seriesScoreChipText: { color: Colors.textSecondary, fontSize: 11, fontFamily: Fonts.bodySemiBold },
   totalCol: { alignItems: 'flex-end', marginLeft: 10 },
-  totalLabel: { color: Colors.textSecondary, fontSize: 10, textTransform: 'uppercase', fontWeight: '700' },
-  totalValue: { color: Colors.textPrimary, fontSize: 18, fontWeight: '800', marginTop: 2 },
+  totalLabel: { color: Colors.textSecondary, fontSize: 10, textTransform: 'uppercase', fontFamily: Fonts.bodySemiBold },
+  totalValue: { color: Colors.textPrimary, fontSize: 18, fontFamily: Fonts.scoreBold, marginTop: 2 },
   scoreAccessWrap: {
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 10,
-    padding: 12,
     marginBottom: 14,
   },
-  scoreAccessTitle: { color: Colors.info, fontWeight: '800', fontSize: 13 },
-  scoreAccessMeta: { color: Colors.textSecondary, fontSize: 12, marginTop: 4 },
-  scoreAccessHint: { color: Colors.textPrimary, fontSize: 12, lineHeight: 17, marginTop: 6 },
-  scoreAccessEmpty: { color: Colors.textSecondary, fontSize: 12, marginTop: 8 },
+  scoreAccessTitle: { color: Colors.info, fontFamily: Fonts.bodyBold, fontSize: 13 },
+  scoreAccessMeta: { color: Colors.textSecondary, fontFamily: Fonts.bodyRegular, fontSize: 12, marginTop: 4 },
+  scoreAccessHint: { color: Colors.textPrimary, fontFamily: Fonts.bodyRegular, fontSize: 12, lineHeight: 17, marginTop: 6 },
+  scoreAccessEmpty: { color: Colors.textSecondary, fontFamily: Fonts.bodyRegular, fontSize: 12, marginTop: 8 },
   scoreAccessRow: {
     marginTop: 8,
     borderWidth: 1,
@@ -896,7 +873,7 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
   },
-  scoreAccessName: { color: Colors.textPrimary, fontWeight: '700', fontSize: 13, flex: 1 },
+  scoreAccessName: { color: Colors.textPrimary, fontFamily: Fonts.bodySemiBold, fontSize: 13, flex: 1 },
   scoreAccessRemoveBtn: {
     borderWidth: 1,
     borderColor: Colors.border,
@@ -905,18 +882,18 @@ const styles = StyleSheet.create({
     paddingHorizontal: 8,
     paddingVertical: 6,
   },
-  scoreAccessRemoveText: { color: Colors.textSecondary, fontWeight: '700', fontSize: 11 },
+  scoreAccessRemoveText: { color: Colors.textSecondary, fontFamily: Fonts.bodySemiBold, fontSize: 11 },
   scoreAccessManageBtn: {
     marginTop: 10,
     borderWidth: 1,
     borderColor: Colors.info,
-    backgroundColor: 'rgba(59,130,246,0.14)',
+    backgroundColor: Colors.badgeInfoBg,
     borderRadius: 8,
     paddingVertical: 10,
     alignItems: 'center',
   },
-  scoreAccessManageText: { color: Colors.info, fontWeight: '800', fontSize: 12 },
-  scoreAccessLocked: { color: Colors.warning, fontSize: 12, marginTop: 10 },
+  scoreAccessManageText: { color: Colors.info, fontFamily: Fonts.bodySemiBold, fontSize: 12 },
+  scoreAccessLocked: { color: Colors.warning, fontFamily: Fonts.bodyRegular, fontSize: 12, marginTop: 10 },
   scoreAccessPickRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -930,11 +907,11 @@ const styles = StyleSheet.create({
   },
   scoreAccessPickRowSel: {
     borderColor: Colors.info,
-    backgroundColor: 'rgba(59,130,246,0.10)',
+    backgroundColor: Colors.badgeInfoBg,
   },
-  scoreAccessPickName: { color: Colors.textPrimary, fontSize: 14, fontWeight: '700' },
+  scoreAccessPickName: { color: Colors.textPrimary, fontSize: 14, fontFamily: Fonts.bodySemiBold },
   scoreAccessPickNameSel: { color: Colors.info },
-  scoreAccessPickMeta: { color: Colors.textSecondary, fontSize: 11, marginTop: 2 },
+  scoreAccessPickMeta: { color: Colors.textSecondary, fontFamily: Fonts.bodyRegular, fontSize: 11, marginTop: 2 },
   scoreAccessPickCheck: {
     width: 22,
     height: 22,
@@ -949,17 +926,12 @@ const styles = StyleSheet.create({
     borderColor: Colors.info,
     backgroundColor: Colors.info,
   },
-  scoreAccessPickCheckText: { color: Colors.white, fontWeight: '800', fontSize: 12 },
+  scoreAccessPickCheckText: { color: Colors.white, fontFamily: Fonts.bodyBold, fontSize: 12 },
   pendingWrap: {
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderRadius: 10,
-    padding: 12,
     marginBottom: 14,
   },
-  pendingTitle: { color: Colors.warning, fontWeight: '800', fontSize: 13, marginBottom: 8 },
-  pendingEmpty: { color: Colors.textSecondary, fontSize: 12 },
+  pendingTitle: { color: Colors.warning, fontFamily: Fonts.bodyBold, fontSize: 13, marginBottom: 8 },
+  pendingEmpty: { color: Colors.textSecondary, fontFamily: Fonts.bodyRegular, fontSize: 12 },
   pendingRow: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -971,8 +943,8 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     marginBottom: 8,
   },
-  pendingName: { color: Colors.textPrimary, fontWeight: '700', fontSize: 13 },
-  pendingMeta: { color: Colors.textSecondary, fontSize: 11, marginTop: 2 },
+  pendingName: { color: Colors.textPrimary, fontFamily: Fonts.bodySemiBold, fontSize: 13 },
+  pendingMeta: { color: Colors.textSecondary, fontFamily: Fonts.bodyRegular, fontSize: 11, marginTop: 2 },
   pendingPayBtn: {
     backgroundColor: Colors.success,
     borderRadius: 6,
@@ -980,33 +952,28 @@ const styles = StyleSheet.create({
     paddingVertical: 7,
     marginLeft: 8,
   },
-  pendingPayBtnText: { color: Colors.white, fontWeight: '700', fontSize: 11 },
+  pendingPayBtnText: { color: Colors.white, fontFamily: Fonts.bodySemiBold, fontSize: 11 },
   pendingRemoveBtn: {
     marginLeft: 6,
     borderRadius: 6,
     borderWidth: 1,
     borderColor: Colors.danger,
-    backgroundColor: 'rgba(251,113,133,0.14)',
+    backgroundColor: Colors.badgeDangerBg,
     width: 28,
     height: 28,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  pendingRemoveBtnText: { color: Colors.danger, fontWeight: '800', fontSize: 11 },
+  pendingRemoveBtnText: { color: Colors.danger, fontFamily: Fonts.bodySemiBold, fontSize: 11 },
   rosterHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 16 },
-  rosterCount: { color: Colors.textSecondary, fontWeight: '600' },
-  editLink: { color: Colors.primary, fontWeight: 'bold' },
+  rosterCount: { color: Colors.textSecondary, fontFamily: Fonts.bodySemiBold },
+  editLink: { color: Colors.primary, fontFamily: Fonts.bodyBold },
   rosterRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    backgroundColor: Colors.surface,
-    padding: 12,
     marginBottom: 8,
-    borderRadius: 12,
-    borderWidth: 1,
-    borderColor: Colors.border,
   },
-  rosterRowDim: { opacity: 0.5, backgroundColor: Colors.background },
+  rosterRowDim: { opacity: 0.5 },
   avatar: {
     width: 36,
     height: 36,
@@ -1016,10 +983,10 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginRight: 12,
   },
-  avatarText: { color: Colors.textPrimary, fontWeight: 'bold' },
+  avatarText: { color: Colors.textPrimary, fontFamily: Fonts.bodyBold },
   rosterInfo: { flex: 1 },
-  rosterName: { color: Colors.textPrimary, fontWeight: '600', fontSize: 16 },
-  rosterStats: { color: Colors.textSecondary, fontSize: 12 },
+  rosterName: { color: Colors.textPrimary, fontFamily: Fonts.bodySemiBold, fontSize: 16 },
+  rosterStats: { color: Colors.textSecondary, fontFamily: Fonts.bodyRegular, fontSize: 12 },
   entryBadge: {
     backgroundColor: Colors.surfaceSecondary,
     paddingHorizontal: 10,
@@ -1030,10 +997,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     minWidth: 70,
   },
-  entryCount: { color: Colors.white, fontSize: 14, fontWeight: 'bold' },
-  entryLabel: { color: Colors.textSecondary, fontSize: 10, textTransform: 'uppercase' },
-  elimBadge: { backgroundColor: 'rgba(239,68,68,0.2)', paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
-  elimText: { color: Colors.danger, fontSize: 12, fontWeight: 'bold' },
+  entryCount: { color: Colors.white, fontSize: 14, fontFamily: Fonts.scoreBold },
+  entryLabel: { color: Colors.textSecondary, fontFamily: Fonts.bodySemiBold, fontSize: 10, textTransform: 'uppercase' },
+  elimBadge: { backgroundColor: Colors.badgeDangerBg, paddingHorizontal: 10, paddingVertical: 6, borderRadius: 8 },
+  elimText: { color: Colors.danger, fontSize: 12, fontFamily: Fonts.bodyBold },
   footer: {
     position: 'absolute',
     bottom: 0,
@@ -1048,11 +1015,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
   },
   footerInfo: { flex: 1 },
-  footerSlots: { color: Colors.textSecondary, fontSize: 14 },
-  footerHint: { color: Colors.textLight, fontSize: 10, marginTop: 2 },
+  footerSlots: { color: Colors.textSecondary, fontFamily: Fonts.bodyRegular, fontSize: 14 },
+  footerHint: { color: Colors.textLight, fontFamily: Fonts.bodyRegular, fontSize: 10, marginTop: 2 },
   deployBtn: { backgroundColor: Colors.success, paddingVertical: 12, paddingHorizontal: 20, borderRadius: 8 },
   deployBtnOff: { backgroundColor: Colors.border, opacity: 0.5 },
-  deployBtnText: { color: Colors.white, fontWeight: 'bold', fontSize: 16 },
+  deployBtnText: { color: Colors.white, fontFamily: Fonts.bodyBold, fontSize: 16 },
   modalContainer: { flex: 1, backgroundColor: Colors.background },
   modalHeader: {
     flexDirection: 'row',
@@ -1063,8 +1030,8 @@ const styles = StyleSheet.create({
     borderBottomColor: Colors.border,
     backgroundColor: Colors.surface,
   },
-  modalTitle: { fontSize: 18, fontWeight: 'bold', color: Colors.white },
-  doneText: { color: Colors.primary, fontSize: 16, fontWeight: 'bold' },
+  modalTitle: { fontSize: 18, fontFamily: Fonts.bodyBold, color: Colors.white },
+  doneText: { color: Colors.primary, fontSize: 16, fontFamily: Fonts.bodyBold },
   searchBar: { padding: 16, backgroundColor: Colors.surface, borderBottomWidth: 1, borderBottomColor: Colors.border },
   searchInput: { backgroundColor: Colors.background, borderWidth: 1, borderColor: Colors.border, borderRadius: 8, padding: 12, color: Colors.white },
   modalList: { flex: 1, padding: 16 },
@@ -1080,10 +1047,10 @@ const styles = StyleSheet.create({
   },
   playerRowSel: { borderColor: Colors.primary, backgroundColor: Colors.surfaceSecondary },
   playerTouch: { flex: 1, flexDirection: 'row', alignItems: 'center', padding: 12 },
-  playerName: { color: Colors.textPrimary, fontSize: 16, fontWeight: '600' },
-  playerStats: { color: Colors.textSecondary, fontSize: 12 },
+  playerName: { color: Colors.textPrimary, fontSize: 16, fontFamily: Fonts.bodySemiBold },
+  playerStats: { color: Colors.textSecondary, fontFamily: Fonts.bodyRegular, fontSize: 12 },
   countWrap: { alignItems: 'center', marginLeft: 8 },
-  countLabel: { fontSize: 8, color: Colors.textSecondary, textTransform: 'uppercase', marginBottom: 2 },
+  countLabel: { fontSize: 8, fontFamily: Fonts.bodySemiBold, color: Colors.textSecondary, textTransform: 'uppercase', marginBottom: 2 },
   countInput: {
     backgroundColor: Colors.background,
     borderWidth: 1,
@@ -1093,7 +1060,7 @@ const styles = StyleSheet.create({
     height: 36,
     textAlign: 'center',
     color: Colors.white,
-    fontWeight: 'bold',
+    fontFamily: Fonts.scoreBold,
     fontSize: 16,
   },
 });
