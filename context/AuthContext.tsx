@@ -31,7 +31,7 @@ export function useAuth(): AuthContextValue {
 
 export function AuthProvider({ children }: { children: React.ReactNode }) {
   const [user, setUser] = useState<AuthUser | null>(null);
-  const [mode, setMode] = useState<'admin' | 'user'>('admin');
+  const [mode, setMode] = useState<'admin' | 'user'>('user');
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -45,7 +45,7 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
             emailVerified: typeof savedUser.emailVerified === 'boolean' ? savedUser.emailVerified : true,
           });
         }
-        setMode((savedMode as 'admin' | 'user') || 'admin');
+        setMode((savedMode as 'admin' | 'user') || 'user');
       } catch (e) {
         console.error('Auth load error:', e);
       } finally {
@@ -98,8 +98,8 @@ export function AuthProvider({ children }: { children: React.ReactNode }) {
   const signOut = useCallback(async () => {
     setUser(null);
     await clearAuthUser();
-    setMode('admin');
-    await saveUserMode('admin');
+    setMode('user');
+    await saveUserMode('user');
   }, []);
 
   const switchToAdmin = useCallback(async () => {
