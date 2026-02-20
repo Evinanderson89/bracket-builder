@@ -13,6 +13,7 @@ import {
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { Colors } from '../styles/colors';
+import { Fonts } from '../styles/typography';
 import { summarizeBowlingCenters } from '../utils/bowlingCenters';
 import NavigationHeader from '../components/NavigationHeader';
 import { CohortStatus } from '../utils/types';
@@ -185,7 +186,7 @@ export default function UserEntryScreen() {
 const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   scroll: { padding: 16 },
-  sectionTitle: { color: Colors.white, fontSize: 18, fontWeight: 'bold', marginBottom: 16 },
+  sectionTitle: { color: Colors.white, fontSize: 18, fontFamily: Fonts.serifBold, marginBottom: 16 },
   card: {
     backgroundColor: Colors.surface,
     padding: 16,
@@ -193,22 +194,31 @@ const styles = StyleSheet.create({
     marginBottom: 12,
     borderWidth: 1,
     borderColor: Colors.border,
+    borderTopColor: '#2E3F34',
+    borderLeftColor: '#2E3F34',
+    borderBottomColor: '#1A261F',
+    borderRightColor: '#1A261F',
     flexDirection: 'row',
     alignItems: 'center',
+    shadowColor: Colors.shadow,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.25,
+    shadowRadius: 8,
+    elevation: 4,
   },
   cardInfo: { flex: 1 },
-  cardTitle: { color: Colors.white, fontSize: 16, fontWeight: 'bold', marginBottom: 4 },
+  cardTitle: { color: Colors.white, fontSize: 16, fontFamily: Fonts.serifBold, marginBottom: 4 },
   cardDetail: { color: Colors.textSecondary, fontSize: 12 },
   cardCenter: { color: Colors.info, fontSize: 12, marginTop: 4, fontWeight: '700' },
   cardDescription: { color: Colors.textPrimary, fontSize: 12, lineHeight: 17, marginTop: 8 },
-  paidBadge: { color: Colors.success, fontSize: 12, marginTop: 6, fontWeight: 'bold' },
-  pendingBadge: { color: Colors.warning, fontSize: 12, marginTop: 4, fontWeight: 'bold' },
+  paidBadge: { color: Colors.success, fontSize: 12, marginTop: 6, fontFamily: Fonts.sansBold },
+  pendingBadge: { color: Colors.warning, fontSize: 12, marginTop: 4, fontFamily: Fonts.sansBold },
   joinBtn: { backgroundColor: Colors.primary, paddingHorizontal: 14, paddingVertical: 10, borderRadius: 8 },
-  joinBtnText: { color: Colors.white, fontWeight: 'bold', fontSize: 12 },
+  joinBtnText: { color: Colors.white, fontFamily: Fonts.sansBold, fontSize: 12 },
   empty: { alignItems: 'center', marginTop: 60 },
-  emptyText: { color: Colors.white, fontSize: 16, fontWeight: 'bold' },
+  emptyText: { color: Colors.white, fontSize: 16, fontFamily: Fonts.serifBold },
   emptySub: { color: Colors.textSecondary, fontSize: 14 },
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.6)', justifyContent: 'center', alignItems: 'center' },
+  overlay: { flex: 1, backgroundColor: 'rgba(10,22,16,0.8)', justifyContent: 'center', alignItems: 'center' },
   modalContent: {
     backgroundColor: Colors.surface,
     width: '85%',
@@ -217,9 +227,9 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
   },
-  modalTitle: { color: Colors.white, fontSize: 20, fontWeight: 'bold', marginBottom: 8, textAlign: 'center' },
+  modalTitle: { color: Colors.white, fontSize: 20, fontFamily: Fonts.serifBold, marginBottom: 8, textAlign: 'center' },
   modalSub: { color: Colors.textSecondary, textAlign: 'center', marginBottom: 4 },
-  costInfo: { color: Colors.primary, textAlign: 'center', marginBottom: 20, fontWeight: 'bold', fontSize: 12 },
+  costInfo: { color: Colors.primary, textAlign: 'center', marginBottom: 20, fontFamily: Fonts.sansBold, fontSize: 12 },
   inputWrap: { alignItems: 'center', marginBottom: 24 },
   input: {
     backgroundColor: Colors.background,
@@ -234,7 +244,7 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     marginBottom: 8,
   },
-  totalText: { color: Colors.white, fontWeight: 'bold' },
+  totalText: { color: Colors.white, fontFamily: Fonts.sansBold },
   modalBtns: { flexDirection: 'row', gap: 12 },
   cancelBtn: {
     flex: 1,
@@ -245,7 +255,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
   },
-  cancelText: { color: Colors.textSecondary, fontWeight: 'bold' },
+  cancelText: { color: Colors.textSecondary, fontFamily: Fonts.sansBold },
   confirmBtn: { flex: 1, padding: 14, borderRadius: 8, backgroundColor: Colors.success, alignItems: 'center' },
-  confirmText: { color: Colors.white, fontWeight: 'bold' },
+  confirmText: { color: Colors.white, fontFamily: Fonts.sansBold },
 });

@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '../context/AuthContext';
 import { useApp } from '../context/AppContext';
 import { Colors } from '../styles/colors';
+import { Fonts } from '../styles/typography';
 import NavigationHeader from '../components/NavigationHeader';
 
 export default function UserBracketsScreen() {
@@ -95,19 +96,19 @@ const styles = StyleSheet.create({
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32, marginTop: 60 },
   emptyText: { fontSize: 16, color: Colors.textSecondary, textAlign: 'center', marginBottom: 24 },
   enterBtn: { backgroundColor: Colors.primary, paddingHorizontal: 24, paddingVertical: 12, borderRadius: 8 },
-  enterBtnText: { color: Colors.white, fontWeight: '600' },
-  card: { backgroundColor: Colors.surface, margin: 16, marginBottom: 0, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: Colors.border },
+  enterBtnText: { color: Colors.white, fontFamily: Fonts.sansBold },
+  card: { backgroundColor: Colors.surface, margin: 16, marginBottom: 0, padding: 16, borderRadius: 12, borderWidth: 1, borderColor: Colors.border, borderTopColor: '#2E3F34', borderLeftColor: '#2E3F34', borderBottomColor: '#1A261F', borderRightColor: '#1A261F', shadowColor: Colors.shadow, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 8, elevation: 4 },
   cardDone: { opacity: 0.7 },
   cardElim: { borderColor: Colors.danger, opacity: 0.6 },
   cardHeader: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', marginBottom: 8 },
-  cardTitle: { fontSize: 18, fontWeight: 'bold', color: Colors.white, flex: 1 },
+  cardTitle: { fontSize: 18, fontFamily: Fonts.serifBold, color: Colors.white, flex: 1 },
   badge: { paddingHorizontal: 12, paddingVertical: 4, borderRadius: 12 },
-  badgeActive: { backgroundColor: 'rgba(59,130,246,0.2)' },
-  badgeElim: { backgroundColor: 'rgba(239,68,68,0.2)' },
-  badgeDone: { backgroundColor: 'rgba(16,185,129,0.2)' },
-  badgeText: { fontSize: 12, fontWeight: 'bold', color: Colors.white },
+  badgeActive: { backgroundColor: 'rgba(127,179,168,0.2)' },
+  badgeElim: { backgroundColor: 'rgba(192,57,43,0.2)' },
+  badgeDone: { backgroundColor: 'rgba(76,175,80,0.2)' },
+  badgeText: { fontSize: 12, fontFamily: Fonts.sansMedium, color: Colors.white },
   cardInfo: { fontSize: 14, color: Colors.textSecondary, marginBottom: 8 },
   winnerInfo: { flexDirection: 'row', marginTop: 8, paddingTop: 8, borderTopWidth: 1, borderTopColor: Colors.border },
   winnerLabel: { fontSize: 14, color: Colors.textSecondary },
-  winnerName: { fontSize: 14, fontWeight: 'bold', color: Colors.accent },
+  winnerName: { fontSize: 14, fontFamily: Fonts.serifBold, color: Colors.accent },
 });

@@ -3,6 +3,7 @@ import { View, Text, StyleSheet, ScrollView, SafeAreaView } from 'react-native';
 import { useAuth } from '../context/AuthContext';
 import { useApp } from '../context/AppContext';
 import { Colors } from '../styles/colors';
+import { Fonts } from '../styles/typography';
 import NavigationHeader from '../components/NavigationHeader';
 import { PayoutAmounts } from '../utils/types';
 
@@ -158,17 +159,17 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   center: { flex: 1, justifyContent: 'center', alignItems: 'center', padding: 32 },
   emptyText: { fontSize: 16, color: Colors.textSecondary, textAlign: 'center' },
-  hud: { margin: 16, backgroundColor: Colors.surface, borderRadius: 12, borderWidth: 1, borderColor: Colors.border, overflow: 'hidden' },
+  hud: { margin: 16, backgroundColor: Colors.surface, borderRadius: 12, borderWidth: 1, borderColor: Colors.border, borderTopColor: '#2E3F34', borderLeftColor: '#2E3F34', borderBottomColor: '#1A261F', borderRightColor: '#1A261F', overflow: 'hidden', shadowColor: Colors.shadow, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 8, elevation: 4 },
   hudMain: { flexDirection: 'row', borderBottomWidth: 1, borderColor: Colors.border },
   hudMainItem: { flex: 1, padding: 20, alignItems: 'center' },
-  hudMainVal: { fontSize: 28, fontWeight: 'bold', marginTop: 4 },
-  hudLabel: { fontSize: 12, color: Colors.textSecondary, textTransform: 'uppercase', fontWeight: 'bold' },
+  hudMainVal: { fontSize: 28, fontFamily: Fonts.serifBold, marginTop: 4 },
+  hudLabel: { fontSize: 12, color: Colors.textSecondary, textTransform: 'uppercase', fontFamily: Fonts.sansMedium },
   hudGrid: { flexDirection: 'row', padding: 16 },
   hudItem: { flex: 1, alignItems: 'center' },
-  hudSmLabel: { fontSize: 10, color: Colors.textSecondary, textTransform: 'uppercase', marginBottom: 4 },
-  hudSmVal: { fontSize: 16, fontWeight: 'bold', color: Colors.white },
-  chartBox: { marginHorizontal: 16, marginBottom: 16, padding: 16, backgroundColor: Colors.surface, borderRadius: 12, borderWidth: 1, borderColor: Colors.border },
-  chartTitle: { color: Colors.white, fontWeight: 'bold', marginBottom: 16, textAlign: 'center', fontSize: 14 },
+  hudSmLabel: { fontSize: 10, color: Colors.textSecondary, textTransform: 'uppercase', fontFamily: Fonts.sansMedium, marginBottom: 4 },
+  hudSmVal: { fontSize: 16, fontFamily: Fonts.serifBold, color: Colors.white },
+  chartBox: { marginHorizontal: 16, marginBottom: 16, padding: 16, backgroundColor: Colors.surface, borderRadius: 12, borderWidth: 1, borderColor: Colors.border, borderTopColor: '#2E3F34', borderLeftColor: '#2E3F34', borderBottomColor: '#1A261F', borderRightColor: '#1A261F', shadowColor: Colors.shadow, shadowOffset: { width: 0, height: 4 }, shadowOpacity: 0.25, shadowRadius: 8, elevation: 4 },
+  chartTitle: { color: Colors.white, fontFamily: Fonts.serifBold, marginBottom: 16, textAlign: 'center', fontSize: 14 },
   chartBody: { flexDirection: 'row', height: 160, alignItems: 'flex-end', justifyContent: 'space-around', paddingVertical: 10 },
   barCol: { alignItems: 'center', flex: 1 },
   barTrack: { height: 100, width: 12, justifyContent: 'flex-end' },
@@ -176,10 +177,10 @@ const styles = StyleSheet.create({
   barLabel: { fontSize: 9, color: Colors.textSecondary, marginBottom: 2 },
   barDate: { fontSize: 9, color: Colors.textSecondary, marginTop: 4 },
   histList: { paddingHorizontal: 16 },
-  sectionHeader: { color: Colors.textSecondary, fontWeight: 'bold', marginBottom: 12, textTransform: 'uppercase', fontSize: 12 },
-  histRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: Colors.surface, padding: 16, borderRadius: 8, marginBottom: 8, borderWidth: 1, borderColor: Colors.border },
-  histDate: { color: Colors.white, fontWeight: 'bold', fontSize: 16 },
+  sectionHeader: { color: Colors.textSecondary, fontFamily: Fonts.sansMedium, marginBottom: 12, textTransform: 'uppercase', fontSize: 12 },
+  histRow: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'center', backgroundColor: Colors.surface, padding: 16, borderRadius: 8, marginBottom: 8, borderWidth: 1, borderColor: Colors.border, borderTopColor: '#2E3F34', borderLeftColor: '#2E3F34', borderBottomColor: '#1A261F', borderRightColor: '#1A261F', shadowColor: Colors.shadow, shadowOffset: { width: 0, height: 3 }, shadowOpacity: 0.2, shadowRadius: 6, elevation: 3 },
+  histDate: { color: Colors.white, fontFamily: Fonts.serifBold, fontSize: 16 },
   histSub: { color: Colors.textSecondary, fontSize: 12 },
   histWon: { color: Colors.success, fontSize: 12, marginBottom: 2 },
-  histPnl: { fontWeight: 'bold', fontSize: 16 },
+  histPnl: { fontFamily: Fonts.serifBold, fontSize: 16 },
 });

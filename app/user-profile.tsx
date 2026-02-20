@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { useAuth } from '../context/AuthContext';
 import { useApp } from '../context/AppContext';
 import { Colors } from '../styles/colors';
+import { Fonts } from '../styles/typography';
 import NavigationHeader from '../components/NavigationHeader';
 
 export default function UserProfileScreen() {
@@ -90,15 +91,15 @@ const styles = StyleSheet.create({
   scroll: { flex: 1 },
   form: { padding: 16 },
   notice: {
-    backgroundColor: 'rgba(245,158,11,0.1)', borderWidth: 1, borderColor: Colors.warning,
+    backgroundColor: 'rgba(218,165,32,0.1)', borderWidth: 1, borderColor: Colors.warning,
     borderRadius: 8, padding: 12, marginBottom: 8,
   },
   noticeText: { color: Colors.warning, fontSize: 12, lineHeight: 18 },
-  label: { fontSize: 14, fontWeight: '600', color: Colors.white, marginBottom: 8, marginTop: 16 },
+  label: { fontSize: 14, fontFamily: Fonts.sansBold, color: Colors.white, marginBottom: 8, marginTop: 16 },
   input: {
     backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border,
     borderRadius: 8, padding: 12, color: Colors.white, fontSize: 16,
   },
   saveBtn: { backgroundColor: Colors.primary, padding: 16, borderRadius: 8, alignItems: 'center', marginTop: 24 },
-  saveBtnText: { color: Colors.white, fontSize: 16, fontWeight: '600' },
+  saveBtnText: { color: Colors.white, fontSize: 16, fontFamily: Fonts.sansBold },
 });

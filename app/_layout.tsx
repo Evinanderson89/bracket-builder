@@ -1,8 +1,28 @@
+import { useEffect } from 'react';
 import { Stack } from 'expo-router';
+import { useFonts } from 'expo-font';
+import * as SplashScreen from 'expo-splash-screen';
 import { AppProvider } from '../context/AppContext';
 import { AuthProvider } from '../context/AuthContext';
+import { Fonts } from '../styles/typography';
+
+SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
+  const [fontsLoaded] = useFonts({
+    [Fonts.serifBold]: require('../assets/fonts/PlayfairDisplay-Bold.ttf'),
+    [Fonts.serifBoldItalic]: require('../assets/fonts/PlayfairDisplay-BoldItalic.ttf'),
+    [Fonts.sansRegular]: require('../assets/fonts/Inter-Regular.ttf'),
+    [Fonts.sansMedium]: require('../assets/fonts/Inter-Medium.ttf'),
+    [Fonts.sansBold]: require('../assets/fonts/Inter-Bold.ttf'),
+  });
+
+  useEffect(() => {
+    if (fontsLoaded) SplashScreen.hideAsync();
+  }, [fontsLoaded]);
+
+  if (!fontsLoaded) return null;
+
   return (
     <AuthProvider>
       <AppProvider>
