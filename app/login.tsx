@@ -26,7 +26,7 @@ WebBrowser.maybeCompleteAuthSession();
 
 export default function LoginScreen() {
   const router = useRouter();
-  const { signIn, signInDev, switchToAdmin, user } = useAuth();
+  const { signIn, signInDev, user } = useAuth();
   const { ensurePlayerForAuthUser } = useApp();
   const [email, setEmail] = useState('');
   const [name, setName] = useState('');
@@ -90,7 +90,7 @@ export default function LoginScreen() {
           console.warn('Auto-create player failed:', e);
         }
 
-        router.replace('/user-dashboard' as any);
+        router.replace('/' as any);
       } catch (e: any) {
         Alert.alert('Google Sign-In Failed', e.message || 'Unable to authenticate with Google');
       }
@@ -106,7 +106,7 @@ export default function LoginScreen() {
     setDevLoading(true);
     try {
       await signInDev(email || undefined, name || undefined);
-      router.replace('/user-dashboard' as any);
+      router.replace('/' as any);
     } catch (e: any) {
       Alert.alert('Error', e.message || 'Sign-in failed');
     } finally {
@@ -203,22 +203,14 @@ export default function LoginScreen() {
             </View>
           )}
 
-          <TouchableOpacity
-            style={[styles.button, styles.adminButton]}
-            onPress={async () => { await switchToAdmin(); router.replace('/' as any); }}
-            activeOpacity={0.85}
-          >
-            <Ionicons name="settings" size={16} color={Colors.white} style={{ marginRight: 7 }} />
-            <Text style={styles.buttonText}>Admin Access</Text>
-          </TouchableOpacity>
-
           {user && (
             <TouchableOpacity
-              style={[styles.button, styles.switchButton]}
-              onPress={async () => { await switchToAdmin(); router.replace('/' as any); }}
+              style={[styles.button, styles.homeButton]}
+              onPress={() => router.replace('/' as any)}
               activeOpacity={0.85}
             >
-              <Text style={styles.buttonText}>Switch to Admin View</Text>
+              <Ionicons name="home" size={16} color={Colors.white} style={{ marginRight: 7 }} />
+              <Text style={styles.buttonText}>Back to Home</Text>
             </TouchableOpacity>
           )}
         </View>
@@ -332,8 +324,7 @@ const styles = StyleSheet.create({
     backgroundColor: Platform.OS === 'web' ? '#5C3D2E' : '#6B4A38',
     marginTop: 0,
   },
-  adminButton: { backgroundColor: Colors.accent },
-  switchButton: { backgroundColor: Colors.success, marginTop: 10 },
+  homeButton: { backgroundColor: Colors.accent, marginTop: 10 },
   devWrap: {
     marginTop: 16,
     paddingTop: 12,

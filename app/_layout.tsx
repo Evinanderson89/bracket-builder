@@ -36,7 +36,6 @@ export default function RootLayout() {
           <Stack.Screen name="game-entry" />
           <Stack.Screen name="admin" />
           <Stack.Screen name="payout" />
-          <Stack.Screen name="user-dashboard" />
           <Stack.Screen name="user-profile" />
           <Stack.Screen name="user-brackets" />
           <Stack.Screen name="user-stats" />

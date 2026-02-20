@@ -4,15 +4,13 @@ import { useRouter, usePathname } from 'expo-router';
 import { Ionicons } from '@expo/vector-icons';
 import { Colors } from '../styles/colors';
 import { Fonts } from '../styles/typography';
-import { useAuth } from '../context/AuthContext';
 
 const BACK_ROUTES: Record<string, string> = {
   '/login': '/',
-  '/user-dashboard': '/login',
-  '/user-profile': '/user-dashboard',
-  '/user-brackets': '/user-dashboard',
-  '/user-stats': '/user-dashboard',
-  '/user-entry': '/user-dashboard',
+  '/user-profile': '/',
+  '/user-brackets': '/',
+  '/user-stats': '/',
+  '/user-entry': '/',
   '/cohorts': '/',
   '/cohort-detail': '/cohorts',
   '/bracket-edit': '/cohorts',
@@ -26,6 +24,8 @@ interface Props {
   title: string;
   showBack?: boolean;
   showHome?: boolean;
+  showHamburger?: boolean;
+  onHamburgerPress?: () => void;
 }
 
 interface HeaderButtonProps {
@@ -43,25 +43,38 @@ function HeaderButton({ icon, label, onPress }: HeaderButtonProps) {
   );
 }
 
-export default function NavigationHeader({ title, showBack = true, showHome = true }: Props) {
+export default function NavigationHeader({
+  title,
+  showBack = true,
+  showHome = true,
+  showHamburger = false,
+  onHamburgerPress,
+}: Props) {
   const router = useRouter();
   const pathname = usePathname();
-  const { mode } = useAuth();
 
   const handleBack = () => {
     if (pathname === '/' || pathname === '/index' || pathname === '') return;
-    if (pathname === '/game-entry') {
-      router.push((mode === 'user' ? '/user-dashboard' : '/') as any);
-      return;
-    }
     router.push((BACK_ROUTES[pathname] ?? '/') as any);
+  };
+
+  const renderLeft = () => {
+    if (showHamburger && onHamburgerPress) {
+      return (
+        <TouchableOpacity onPress={onHamburgerPress} style={styles.hamburger} hitSlop={8} activeOpacity={0.84}>
+          <Ionicons name="menu" size={22} color={Colors.primary} />
+        </TouchableOpacity>
+      );
+    }
+    if (showBack) {
+      return <HeaderButton icon="arrow-back" label="Back" onPress={handleBack} />;
+    }
+    return <View style={styles.spacer} />;
   };
 
   return (
     <View style={styles.header}>
-      {showBack
-        ? <HeaderButton icon="arrow-back" label="Back" onPress={handleBack} />
-        : <View style={styles.spacer} />}
+      {renderLeft()}
 
       <Text style={styles.title} numberOfLines={1}>{title}</Text>
 
@@ -98,6 +111,13 @@ const styles = StyleSheet.create({
     paddingVertical: 8,
     flexDirection: 'row',
     alignItems: 'center',
+    justifyContent: 'center',
+  },
+  hamburger: {
+    minWidth: 88,
+    paddingVertical: 8,
+    paddingHorizontal: 12,
+    alignItems: 'flex-start',
     justifyContent: 'center',
   },
   btnText: {
