@@ -15,6 +15,7 @@ import { useLocalSearchParams } from 'expo-router';
 import { useApp } from '../context/AppContext';
 import { useAuth } from '../context/AuthContext';
 import { Colors } from '../styles/colors';
+import { Fonts } from '../styles/typography';
 import { CohortType, TournamentKind } from '../utils/types';
 import {
   advanceWinner,
@@ -506,7 +507,7 @@ const styles = StyleSheet.create({
     gap: 20,
   },
   selCol: { flex: 1, justifyContent: 'center' },
-  selTitle: { fontSize: 18, fontWeight: 'bold', color: Colors.white, marginBottom: 8 },
+  selTitle: { fontSize: 18, fontFamily: Fonts.serifBold, color: Colors.white, marginBottom: 8 },
   selSub: { fontSize: 14, color: Colors.white, opacity: 0.9, lineHeight: 19 },
   dropBtn: {
     flexDirection: 'row',
@@ -522,7 +523,7 @@ const styles = StyleSheet.create({
   dropBtnOff: { opacity: 0.55 },
   dropArrow: { fontSize: 12, color: Colors.textSecondary, marginLeft: 8 },
   syncBtn: {
-    backgroundColor: 'rgba(255,255,255,0.2)',
+    backgroundColor: 'rgba(245,230,200,0.15)',
     paddingVertical: 10,
     paddingHorizontal: 16,
     borderRadius: 8,
@@ -532,16 +533,16 @@ const styles = StyleSheet.create({
     marginTop: 12,
   },
   syncBtnOff: { opacity: 0.6 },
-  syncBtnText: { color: Colors.white, fontWeight: 'bold' },
+  syncBtnText: { color: Colors.white, fontFamily: Fonts.sansBold },
   accessWarn: {
     borderRadius: 10,
     borderWidth: 1,
     borderColor: Colors.warning,
-    backgroundColor: 'rgba(245,158,11,0.12)',
+    backgroundColor: 'rgba(218,165,32,0.12)',
     padding: 10,
     marginBottom: 10,
   },
-  accessWarnTitle: { color: Colors.warning, fontWeight: '800', fontSize: 12, marginBottom: 3 },
+  accessWarnTitle: { color: Colors.warning, fontFamily: Fonts.sansBold, fontSize: 12, marginBottom: 3 },
   accessWarnText: { color: Colors.textPrimary, fontSize: 12, lineHeight: 17 },
   contextWrap: {
     borderRadius: 10,
@@ -552,10 +553,10 @@ const styles = StyleSheet.create({
     marginBottom: 10,
   },
   contextText: { color: Colors.textSecondary, fontSize: 12, lineHeight: 17 },
-  overlay: { flex: 1, backgroundColor: 'rgba(0,0,0,0.5)', justifyContent: 'center', alignItems: 'center' },
+  overlay: { flex: 1, backgroundColor: 'rgba(10,22,16,0.8)', justifyContent: 'center', alignItems: 'center' },
   dropModal: { backgroundColor: Colors.surface, borderRadius: 12, width: '90%', maxHeight: '70%' },
   dropHeader: { flexDirection: 'row', justifyContent: 'space-between', padding: 16, borderBottomWidth: 1, borderBottomColor: Colors.border },
-  dropTitle: { fontSize: 18, fontWeight: 'bold', color: Colors.textPrimary },
+  dropTitle: { fontSize: 18, fontFamily: Fonts.serifBold, color: Colors.textPrimary },
   closeBtn: { fontSize: 20, color: Colors.textSecondary, fontWeight: 'bold' },
   dropList: { maxHeight: 400 },
   dropEmpty: { padding: 18 },
@@ -575,7 +576,7 @@ const styles = StyleSheet.create({
     marginBottom: 8,
     alignItems: 'center',
   },
-  headText: { fontSize: 14, fontWeight: 'bold', color: Colors.white },
+  headText: { fontSize: 14, fontFamily: Fonts.sansBold, color: Colors.white },
   gameCol: { alignItems: 'center' },
   row: {
     flexDirection: 'row',
@@ -623,13 +624,13 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     fontSize: 16,
     color: Colors.textPrimary,
-    fontWeight: '600',
+    fontFamily: Fonts.serifBold,
   },
   cellInputSoft: {
     borderColor: Colors.borderLight,
     backgroundColor: Colors.surfaceSecondary,
   },
-  cellText: { fontSize: 16, fontWeight: '600', color: Colors.textPrimary },
+  cellText: { fontSize: 16, fontFamily: Fonts.serifBold, color: Colors.textPrimary },
   cellTextSoft: { color: Colors.textSecondary },
   disabledText: { color: Colors.textSecondary, fontWeight: 'bold' },
   empty: { padding: 40, alignItems: 'center' },

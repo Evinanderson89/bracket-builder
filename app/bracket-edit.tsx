@@ -11,6 +11,7 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useApp } from '../context/AppContext';
 import { Colors } from '../styles/colors';
+import { Fonts } from '../styles/typography';
 import { CohortType, TournamentKind } from '../utils/types';
 import { getBracketGameWindow, getRoundGameNumber } from '../utils/bracketLogic';
 import NavigationHeader from '../components/NavigationHeader';
@@ -219,18 +220,18 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     zIndex: 10,
   },
-  cohortName: { fontSize: 18, fontWeight: 'bold', color: Colors.white },
+  cohortName: { fontSize: 18, fontFamily: Fonts.serifBold, color: Colors.white },
   cohortType: {
     fontSize: 12,
     color: Colors.accent,
-    fontWeight: '600',
+    fontFamily: Fonts.sansMedium,
     textTransform: 'uppercase',
     letterSpacing: 1,
     marginTop: 2,
   },
   cohortMeta: { fontSize: 12, color: Colors.textSecondary, marginTop: 3 },
   actionBtn: { backgroundColor: Colors.primary, paddingHorizontal: 16, paddingVertical: 10, borderRadius: 20 },
-  actionBtnText: { color: Colors.white, fontWeight: 'bold', fontSize: 12 },
+  actionBtnText: { color: Colors.white, fontFamily: Fonts.sansBold, fontSize: 12 },
   canvas: { flex: 1 },
   canvasInner: { flexGrow: 1, justifyContent: 'center' },
   bracketPad: { padding: 40, minWidth: Dimensions.get('window').width },
@@ -240,7 +241,7 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     fontSize: 10,
     textTransform: 'uppercase',
-    fontWeight: 'bold',
+    fontFamily: Fonts.sansMedium,
     marginBottom: 12,
     letterSpacing: 1,
   },
@@ -261,14 +262,14 @@ const styles = StyleSheet.create({
     borderBottomWidth: 1,
     borderBottomColor: Colors.border,
   },
-  matchTitle: { fontSize: 9, color: Colors.textSecondary, fontWeight: 'bold' },
+  matchTitle: { fontSize: 9, color: Colors.textSecondary, fontFamily: Fonts.sansMedium },
   matchBody: { flex: 1, justifyContent: 'center' },
   playerRow: { flexDirection: 'row', alignItems: 'center', paddingHorizontal: 8, paddingVertical: 4, height: 32 },
-  playerRowWin: { backgroundColor: 'rgba(16,185,129,0.1)' },
+  playerRowWin: { backgroundColor: 'rgba(76,175,80,0.1)' },
   playerRowEmpty: { opacity: 0.5 },
   nameWrap: { flex: 1 },
   pName: { fontSize: 12, color: Colors.textPrimary, fontWeight: '500' },
-  textWin: { color: Colors.success, fontWeight: 'bold' },
+  textWin: { color: Colors.success, fontFamily: Fonts.sansBold },
   textLose: { color: Colors.textSecondary, textDecorationLine: 'line-through' },
   pDetail: { fontSize: 8, color: Colors.textSecondary },
   scoreWrap: { marginLeft: 8, minWidth: 24, alignItems: 'flex-end' },
@@ -280,7 +281,7 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
   },
-  scoreVal: { fontSize: 11, fontWeight: 'bold', color: Colors.textPrimary },
+  scoreVal: { fontSize: 11, fontFamily: Fonts.serifBold, color: Colors.textPrimary },
   noScore: { color: Colors.textLight, fontSize: 12 },
   vs: { height: 1, backgroundColor: Colors.border },
   checkBadge: {
@@ -300,7 +301,7 @@ const styles = StyleSheet.create({
   vLine: { width: 2, backgroundColor: Colors.bracketLine },
   finalLine: { width: 40, height: 2, backgroundColor: Colors.accent, marginTop: 65 },
   champCol: { justifyContent: 'center' },
-  champHeader: { color: Colors.accent, fontSize: 12, fontWeight: 'bold', marginBottom: 8, letterSpacing: 1 },
+  champHeader: { color: Colors.accent, fontSize: 12, fontFamily: Fonts.sansMedium, marginBottom: 8, letterSpacing: 1 },
   champCard: {
     width: 120,
     height: 120,
@@ -311,6 +312,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     alignItems: 'center',
   },
-  champName: { fontSize: 14, fontWeight: 'bold', color: Colors.white, textAlign: 'center', paddingHorizontal: 10 },
-  champSub: { fontSize: 10, color: Colors.accent, fontWeight: 'bold', marginTop: 4, letterSpacing: 1 },
+  champName: { fontSize: 14, fontFamily: Fonts.serifBold, color: Colors.white, textAlign: 'center', paddingHorizontal: 10 },
+  champSub: { fontSize: 10, color: Colors.accent, fontFamily: Fonts.sansMedium, marginTop: 4, letterSpacing: 1 },
 });
